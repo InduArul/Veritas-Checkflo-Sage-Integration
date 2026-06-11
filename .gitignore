@@ -1,0 +1,10 @@
+# OS / editor cruft
+Thumbs.db
+Desktop.ini
+.DS_Store
+*~
+*.tmp
+*.bak
+
+# Local notes not meant for the repo
+/scratch/

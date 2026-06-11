@@ -1,0 +1,1600 @@
+{
+    "name": "Project1_Part7_Checkflo Sage Integration_Reporting",
+    "flow": [
+        {
+            "id": 918,
+            "module": "gateway:CustomWebHook",
+            "version": 1,
+            "parameters": {
+                "hook": 2355018,
+                "maxResults": 1
+            },
+            "mapper": {},
+            "metadata": {
+                "designer": {
+                    "x": 0,
+                    "y": 150
+                },
+                "restore": {
+                    "parameters": {
+                        "hook": {
+                            "data": {
+                                "editable": "true"
+                            },
+                            "label": "Sage_Integration_Part2"
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "hook",
+                        "type": "hook:gateway-webhook",
+                        "label": "Webhook",
+                        "required": true
+                    },
+                    {
+                        "name": "maxResults",
+                        "type": "number",
+                        "label": "Maximum number of results"
+                    }
+                ],
+                "advanced": true
+            }
+        },
+        {
+            "id": 869,
+            "module": "datastore:GetRecord",
+            "version": 1,
+            "parameters": {
+                "datastore": 3445
+            },
+            "mapper": {
+                "key": "body",
+                "returnWrapped": false
+            },
+            "metadata": {
+                "designer": {
+                    "x": 300,
+                    "y": 150
+                },
+                "restore": {
+                    "parameters": {
+                        "datastore": {
+                            "label": "Email_Body"
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "datastore",
+                        "type": "datastore",
+                        "label": "Data store",
+                        "required": true
+                    }
+                ],
+                "expect": [
+                    {
+                        "name": "key",
+                        "type": "text",
+                        "label": "Key",
+                        "required": true
+                    },
+                    {
+                        "name": "returnWrapped",
+                        "type": "boolean",
+                        "label": "Return Wrapped Output",
+                        "required": true
+                    }
+                ],
+                "interface": [
+                    {
+                        "help": "",
+                        "name": "Body",
+                        "type": "text",
+                        "label": null,
+                        "default": null,
+                        "required": false,
+                        "multiline": true
+                    }
+                ]
+            }
+        },
+        {
+            "id": 878,
+            "module": "datastore:UpdateRecord",
+            "version": 1,
+            "parameters": {
+                "datastore": 3445
+            },
+            "mapper": {
+                "key": "body",
+                "data": {
+                    "Body": "{{emptystring}}"
+                },
+                "upsert": false,
+                "overwriteArrays": true
+            },
+            "metadata": {
+                "designer": {
+                    "x": 600,
+                    "y": 150
+                },
+                "restore": {
+                    "expect": {
+                        "upsert": {
+                            "mode": "chose"
+                        },
+                        "overwriteArrays": {
+                            "mode": "chose"
+                        }
+                    },
+                    "parameters": {
+                        "datastore": {
+                            "label": "Email_Body"
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "datastore",
+                        "type": "datastore",
+                        "label": "Data store",
+                        "required": true
+                    }
+                ],
+                "expect": [
+                    {
+                        "name": "key",
+                        "type": "text",
+                        "label": "Key",
+                        "required": true
+                    },
+                    {
+                        "name": "upsert",
+                        "type": "boolean",
+                        "label": "Insert missing record",
+                        "required": true
+                    },
+                    {
+                        "name": "overwriteArrays",
+                        "type": "boolean",
+                        "label": "Overwrite an existing array in the record",
+                        "required": true
+                    },
+                    {
+                        "name": "data",
+                        "spec": [
+                            {
+                                "name": "Body",
+                                "type": "text",
+                                "label": null
+                            }
+                        ],
+                        "type": "collection",
+                        "label": "Record"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 673,
+            "module": "util:TextAggregator",
+            "version": 1,
+            "parameters": {
+                "feeder": 918,
+                "rowSeparator": ""
+            },
+            "mapper": {
+                "value": "{{869.Body}}"
+            },
+            "metadata": {
+                "designer": {
+                    "x": 900,
+                    "y": 150
+                },
+                "restore": {
+                    "extra": {
+                        "feeder": {
+                            "label": "Webhooks - Custom webhook [918]"
+                        }
+                    },
+                    "parameters": {
+                        "rowSeparator": {
+                            "label": "Empty"
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "rowSeparator",
+                        "type": "select",
+                        "label": "Row separator",
+                        "validate": {
+                            "enum": [
+                                "\n",
+                                "\t",
+                                "other"
+                            ]
+                        }
+                    }
+                ],
+                "expect": [
+                    {
+                        "name": "value",
+                        "type": "text",
+                        "label": "Text"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 882,
+            "module": "builtin:BasicRouter",
+            "version": 1,
+            "parameters": {
+                "else": 0
+            },
+            "filter": {
+                "name": "Email only when there is data to be reported",
+                "conditions": [
+                    [
+                        {
+                            "a": "{{673.text}}",
+                            "o": "exist"
+                        }
+                    ]
+                ]
+            },
+            "mapper": null,
+            "metadata": {
+                "designer": {
+                    "x": 1200,
+                    "y": 150
+                }
+            },
+            "routes": [
+                {
+                    "flow": [
+                        {
+                            "id": 418,
+                            "module": "microsoft-excel:listTableRows",
+                            "version": 2,
+                            "parameters": {
+                                "__IMTCONN__": 450334
+                            },
+                            "filter": {
+                                "name": "When there are failures",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{673.text}}",
+                                            "b": "color: red",
+                                            "o": "text:contain"
+                                        }
+                                    ],
+                                    [
+                                        {
+                                            "a": "{{673.text}}",
+                                            "b": "Variance: NA",
+                                            "o": "text:contain"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "site": "veritashcsolutions.sharepoint.com,63c7d06b-148b-4189-811c-5929df4c94ae,f64c3437-7ff8-45ba-ab34-03be0203669f",
+                                "drive": "b!a9DHY4sUiUGBHFkp30yUrjc0TPb4f7pFqzQDvgIDZp-hLGrLFo5STILpD6_0hItb",
+                                "table": "Email_list",
+                                "select": "list",
+                                "selectB": "site",
+                                "workbook": "01LVSGUWCQGZYDII6MQVCJ5OYQPNJIIWUL/01LVSGUWA5QRZCNUW7BVDJQ72Q26YIRQ3Y/01LVSGUWH3VTVSZXPOORHLI3DEESVTYXWG",
+                                "worksheet": "Emails"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 1500,
+                                    "y": 0,
+                                    "name": "Read Email address"
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "site": {
+                                            "label": "Internal"
+                                        },
+                                        "drive": {
+                                            "label": "Integrations (documentLibrary)"
+                                        },
+                                        "limit": {
+                                            "empty": true
+                                        },
+                                        "table": {
+                                            "mode": "chose",
+                                            "label": "Email_list"
+                                        },
+                                        "select": {
+                                            "label": "Select from the list"
+                                        },
+                                        "selectB": {
+                                            "label": "Site's Drive"
+                                        },
+                                        "workbook": {
+                                            "path": [
+                                                "Veritas Integrations",
+                                                "CheckFlo API",
+                                                "Bank Mapping Document V1.0.xlsx"
+                                            ]
+                                        },
+                                        "worksheet": {
+                                            "mode": "chose",
+                                            "label": "Emails",
+                                            "nested": [
+                                                {
+                                                    "name": "table",
+                                                    "type": "select",
+                                                    "label": "Table",
+                                                    "options": "rpc://microsoft-excel/2/listTables",
+                                                    "required": true
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    "parameters": {
+                                        "__IMTCONN__": {
+                                            "data": {
+                                                "scoped": "true",
+                                                "connection": "azure"
+                                            },
+                                            "label": "Veritas_Sharepoint_Connection (Veritas Reporting)"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "__IMTCONN__",
+                                        "type": "account:azure",
+                                        "label": "Connection",
+                                        "required": true
+                                    }
+                                ],
+                                "expect": [
+                                    {
+                                        "name": "select",
+                                        "type": "select",
+                                        "label": "Select a method",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "map",
+                                                "list"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "limit",
+                                        "type": "uinteger",
+                                        "label": "Limit"
+                                    },
+                                    {
+                                        "name": "selectB",
+                                        "type": "select",
+                                        "label": "Choose your OneDrive location",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "my",
+                                                "site",
+                                                "group"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "site",
+                                        "type": "select",
+                                        "label": "Site ID",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "drive",
+                                        "type": "select",
+                                        "label": "Drive ID",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "workbook",
+                                        "type": "file",
+                                        "label": "Workbook",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "worksheet",
+                                        "type": "select",
+                                        "label": "Worksheet",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "table",
+                                        "type": "select",
+                                        "label": "Table",
+                                        "required": true
+                                    }
+                                ],
+                                "interface": [
+                                    {
+                                        "name": "__IMTLENGTH__",
+                                        "type": "uinteger",
+                                        "label": "Total number of bundles"
+                                    },
+                                    {
+                                        "name": "__IMTINDEX__",
+                                        "type": "uinteger",
+                                        "label": "Bundle order position"
+                                    },
+                                    {
+                                        "name": "@odata.id",
+                                        "type": "text",
+                                        "label": "@Odata ID"
+                                    },
+                                    {
+                                        "name": "index",
+                                        "type": "text",
+                                        "label": "Table Row ID"
+                                    },
+                                    {
+                                        "name": "values",
+                                        "spec": [
+                                            {
+                                                "name": "0",
+                                                "type": "text",
+                                                "label": "Email_Success"
+                                            },
+                                            {
+                                                "name": "1",
+                                                "type": "text",
+                                                "label": "Email_Failures"
+                                            }
+                                        ],
+                                        "type": "collection",
+                                        "label": "Row"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 427,
+                            "module": "builtin:BasicAggregator",
+                            "version": 1,
+                            "parameters": {
+                                "feeder": 418,
+                                "target": "889.toRecipients"
+                            },
+                            "filter": {
+                                "name": "Filter valid emails",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{418.values.`1`}}",
+                                            "b": "",
+                                            "o": "text:notequal"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "name": "",
+                                "address": "{{418.values.`1`}}"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 1800,
+                                    "y": 0
+                                },
+                                "restore": {
+                                    "extra": {
+                                        "feeder": {
+                                            "label": "Read Email address - List Table Rows [418]"
+                                        },
+                                        "target": {
+                                            "label": "To Recipients"
+                                        }
+                                    }
+                                },
+                                "expect": [
+                                    {
+                                        "name": "address",
+                                        "type": "email",
+                                        "label": "Email Address",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "name",
+                                        "type": "text",
+                                        "label": "Name"
+                                    }
+                                ],
+                                "advanced": true
+                            },
+                            "flags": {
+                                "stopIfEmpty": true
+                            }
+                        },
+                        {
+                            "id": 885,
+                            "module": "datastore:GetRecord",
+                            "version": 1,
+                            "parameters": {
+                                "datastore": 3445
+                            },
+                            "mapper": {
+                                "key": "Log_file_name",
+                                "returnWrapped": false
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 2100,
+                                    "y": 0
+                                },
+                                "restore": {
+                                    "parameters": {
+                                        "datastore": {
+                                            "label": "Email_Body"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "datastore",
+                                        "type": "datastore",
+                                        "label": "Data store",
+                                        "required": true
+                                    }
+                                ],
+                                "expect": [
+                                    {
+                                        "name": "key",
+                                        "type": "text",
+                                        "label": "Key",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "returnWrapped",
+                                        "type": "boolean",
+                                        "label": "Return Wrapped Output",
+                                        "required": true
+                                    }
+                                ],
+                                "interface": [
+                                    {
+                                        "help": "",
+                                        "name": "Body",
+                                        "type": "text",
+                                        "label": null,
+                                        "default": null,
+                                        "required": false,
+                                        "multiline": true
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 887,
+                            "module": "util:SetVariables",
+                            "version": 1,
+                            "parameters": {},
+                            "mapper": {
+                                "scope": "roundtrip",
+                                "variables": [
+                                    {
+                                        "name": "Email_subject",
+                                        "value": "{{if(contains(673.text; \"red\") | contains(673.text; \"Checkflo: NA\"); \"checkflo processing update with failures\"; \"checkflo processing update\")}}"
+                                    }
+                                ]
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 2400,
+                                    "y": 0
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "scope": {
+                                            "label": "One cycle"
+                                        },
+                                        "variables": {
+                                            "items": [
+                                                null
+                                            ]
+                                        }
+                                    }
+                                },
+                                "expect": [
+                                    {
+                                        "name": "variables",
+                                        "spec": [
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Variable name",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "value",
+                                                "type": "any",
+                                                "label": "Variable value"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Variables"
+                                    },
+                                    {
+                                        "name": "scope",
+                                        "type": "select",
+                                        "label": "Variable lifetime",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "roundtrip",
+                                                "execution"
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "interface": [
+                                    {
+                                        "name": "Email_subject",
+                                        "type": "any",
+                                        "label": "Email_subject"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 889,
+                            "module": "microsoft-email:createAndSendAMessage",
+                            "version": 2,
+                            "parameters": {
+                                "__IMTCONN__": 450334
+                            },
+                            "mapper": {
+                                "from": [
+                                    {
+                                        "address": "TimeClockPlus@veritashcsolutions.com"
+                                    }
+                                ],
+                                "content": "<p style=\"margin:0 0 32px 0;\">\n    <a href=\"{{885.Body}}\"\n       style=\"color:#2563eb;text-decoration:underline;font-weight:600;\">\n      View Log File\n    </a>\n</p>\n{{673.text}}\n<br>\n<br>",
+                                "subject": "{{887.Email_subject}}",
+                                "importance": "Normal",
+                                "contentType": "html",
+                                "toRecipients": "{{427.array}}",
+                                "singleValueExtendedProperties": {}
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 2700,
+                                    "y": 0
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "from": {
+                                            "mode": "chose",
+                                            "items": [
+                                                null
+                                            ]
+                                        },
+                                        "replyTo": {
+                                            "mode": "chose"
+                                        },
+                                        "importance": {
+                                            "mode": "chose",
+                                            "label": "Normal Priority"
+                                        },
+                                        "attachments": {
+                                            "mode": "chose"
+                                        },
+                                        "contentType": {
+                                            "mode": "chose",
+                                            "label": "HTML"
+                                        },
+                                        "ccRecipients": {
+                                            "mode": "chose"
+                                        },
+                                        "toRecipients": {
+                                            "mode": "edit"
+                                        },
+                                        "bccRecipients": {
+                                            "mode": "chose"
+                                        },
+                                        "internetMessageHeaders": {
+                                            "mode": "chose"
+                                        }
+                                    },
+                                    "parameters": {
+                                        "__IMTCONN__": {
+                                            "data": {
+                                                "scoped": "true",
+                                                "connection": "azure"
+                                            },
+                                            "label": "Veritas_Sharepoint_Connection (Veritas Reporting)"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "__IMTCONN__",
+                                        "type": "account:azure",
+                                        "label": "Connection",
+                                        "required": true
+                                    }
+                                ],
+                                "expect": [
+                                    {
+                                        "name": "toRecipients",
+                                        "spec": [
+                                            {
+                                                "name": "address",
+                                                "type": "email",
+                                                "label": "Email Address",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Name"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "To Recipients",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "subject",
+                                        "type": "text",
+                                        "label": "Subject",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "content",
+                                        "type": "text",
+                                        "label": "Body Content",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "attachments",
+                                        "spec": [
+                                            {
+                                                "name": "filename",
+                                                "type": "filename",
+                                                "label": "File Name",
+                                                "required": true,
+                                                "semantic": "file:name"
+                                            },
+                                            {
+                                                "name": "data",
+                                                "type": "buffer",
+                                                "label": "Data",
+                                                "required": true,
+                                                "semantic": "file:data"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Attachments"
+                                    },
+                                    {
+                                        "name": "replyTo",
+                                        "spec": [
+                                            {
+                                                "name": "address",
+                                                "type": "email",
+                                                "label": "Email Address",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Name"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Reply To"
+                                    },
+                                    {
+                                        "name": "from",
+                                        "spec": [
+                                            {
+                                                "name": "address",
+                                                "type": "email",
+                                                "label": "Email Address",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Name"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "From",
+                                        "validate": {
+                                            "maxItems": 1
+                                        }
+                                    },
+                                    {
+                                        "name": "ccRecipients",
+                                        "spec": [
+                                            {
+                                                "name": "address",
+                                                "type": "email",
+                                                "label": "Email Address",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Name"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "CC Recipients"
+                                    },
+                                    {
+                                        "name": "bccRecipients",
+                                        "spec": [
+                                            {
+                                                "name": "address",
+                                                "type": "email",
+                                                "label": "Email Address",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Name"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Bcc Recipients"
+                                    },
+                                    {
+                                        "name": "importance",
+                                        "type": "select",
+                                        "label": "Importance",
+                                        "validate": {
+                                            "enum": [
+                                                "Low",
+                                                "Normal",
+                                                "High"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "internetMessageHeaders",
+                                        "spec": [
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Name",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "value",
+                                                "type": "text",
+                                                "label": "Value",
+                                                "required": true
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Internet Message Headers"
+                                    },
+                                    {
+                                        "name": "contentType",
+                                        "type": "select",
+                                        "label": "Body Content Type",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "html",
+                                                "text"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "singleValueExtendedProperties",
+                                        "spec": [
+                                            {
+                                                "name": "sensitivityLabel",
+                                                "type": "text",
+                                                "label": "Sensitivity Label"
+                                            }
+                                        ],
+                                        "type": "collection",
+                                        "label": "Extended MAPI Properties"
+                                    }
+                                ],
+                                "advanced": true
+                            }
+                        }
+                    ]
+                },
+                {
+                    "flow": [
+                        {
+                            "id": 883,
+                            "module": "microsoft-excel:listTableRows",
+                            "version": 2,
+                            "parameters": {
+                                "__IMTCONN__": 450334
+                            },
+                            "filter": {
+                                "name": "When there are no failures",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{673.text}}",
+                                            "b": "color: red",
+                                            "o": "text:notcontain"
+                                        },
+                                        {
+                                            "a": "{{673.text}}",
+                                            "b": "Variance: NA",
+                                            "o": "text:notcontain"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "site": "veritashcsolutions.sharepoint.com,63c7d06b-148b-4189-811c-5929df4c94ae,f64c3437-7ff8-45ba-ab34-03be0203669f",
+                                "drive": "b!a9DHY4sUiUGBHFkp30yUrjc0TPb4f7pFqzQDvgIDZp-hLGrLFo5STILpD6_0hItb",
+                                "table": "Email_list",
+                                "select": "list",
+                                "selectB": "site",
+                                "workbook": "01LVSGUWCQGZYDII6MQVCJ5OYQPNJIIWUL/01LVSGUWA5QRZCNUW7BVDJQ72Q26YIRQ3Y/01LVSGUWH3VTVSZXPOORHLI3DEESVTYXWG",
+                                "worksheet": "Emails"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 1500,
+                                    "y": 300,
+                                    "name": "Read Email address"
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "site": {
+                                            "label": "Internal"
+                                        },
+                                        "drive": {
+                                            "label": "Integrations (documentLibrary)"
+                                        },
+                                        "limit": {
+                                            "empty": true
+                                        },
+                                        "table": {
+                                            "mode": "chose",
+                                            "label": "Email_list"
+                                        },
+                                        "select": {
+                                            "label": "Select from the list"
+                                        },
+                                        "selectB": {
+                                            "label": "Site's Drive"
+                                        },
+                                        "workbook": {
+                                            "path": [
+                                                "Veritas Integrations",
+                                                "CheckFlo API",
+                                                "Bank Mapping Document V1.0.xlsx"
+                                            ]
+                                        },
+                                        "worksheet": {
+                                            "mode": "chose",
+                                            "label": "Emails",
+                                            "nested": [
+                                                {
+                                                    "name": "table",
+                                                    "type": "select",
+                                                    "label": "Table",
+                                                    "options": "rpc://microsoft-excel/2/listTables",
+                                                    "required": true
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    "parameters": {
+                                        "__IMTCONN__": {
+                                            "data": {
+                                                "scoped": "true",
+                                                "connection": "azure"
+                                            },
+                                            "label": "Veritas_Sharepoint_Connection (Veritas Reporting)"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "__IMTCONN__",
+                                        "type": "account:azure",
+                                        "label": "Connection",
+                                        "required": true
+                                    }
+                                ],
+                                "expect": [
+                                    {
+                                        "name": "select",
+                                        "type": "select",
+                                        "label": "Select a method",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "map",
+                                                "list"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "limit",
+                                        "type": "uinteger",
+                                        "label": "Limit"
+                                    },
+                                    {
+                                        "name": "selectB",
+                                        "type": "select",
+                                        "label": "Choose your OneDrive location",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "my",
+                                                "site",
+                                                "group"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "site",
+                                        "type": "select",
+                                        "label": "Site ID",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "drive",
+                                        "type": "select",
+                                        "label": "Drive ID",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "workbook",
+                                        "type": "file",
+                                        "label": "Workbook",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "worksheet",
+                                        "type": "select",
+                                        "label": "Worksheet",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "table",
+                                        "type": "select",
+                                        "label": "Table",
+                                        "required": true
+                                    }
+                                ],
+                                "interface": [
+                                    {
+                                        "name": "__IMTLENGTH__",
+                                        "type": "uinteger",
+                                        "label": "Total number of bundles"
+                                    },
+                                    {
+                                        "name": "__IMTINDEX__",
+                                        "type": "uinteger",
+                                        "label": "Bundle order position"
+                                    },
+                                    {
+                                        "name": "@odata.id",
+                                        "type": "text",
+                                        "label": "@Odata ID"
+                                    },
+                                    {
+                                        "name": "index",
+                                        "type": "text",
+                                        "label": "Table Row ID"
+                                    },
+                                    {
+                                        "name": "values",
+                                        "spec": [
+                                            {
+                                                "name": "0",
+                                                "type": "text",
+                                                "label": "Email_Success"
+                                            },
+                                            {
+                                                "name": "1",
+                                                "type": "text",
+                                                "label": "Email_Failures"
+                                            }
+                                        ],
+                                        "type": "collection",
+                                        "label": "Row"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 884,
+                            "module": "builtin:BasicAggregator",
+                            "version": 1,
+                            "parameters": {
+                                "feeder": 883,
+                                "target": "890.toRecipients"
+                            },
+                            "filter": {
+                                "name": "Filter valid emails",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{883.values.`0`}}",
+                                            "b": "",
+                                            "o": "text:notequal"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "name": "",
+                                "address": "{{883.values.`0`}}"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 1800,
+                                    "y": 300
+                                },
+                                "restore": {
+                                    "extra": {
+                                        "feeder": {
+                                            "label": "Read Email address - List Table Rows [883]"
+                                        },
+                                        "target": {
+                                            "label": "To Recipients"
+                                        }
+                                    }
+                                },
+                                "expect": [
+                                    {
+                                        "name": "address",
+                                        "type": "email",
+                                        "label": "Email Address",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "name",
+                                        "type": "text",
+                                        "label": "Name"
+                                    }
+                                ],
+                                "advanced": true
+                            },
+                            "flags": {
+                                "stopIfEmpty": true
+                            }
+                        },
+                        {
+                            "id": 886,
+                            "module": "datastore:GetRecord",
+                            "version": 1,
+                            "parameters": {
+                                "datastore": 3445
+                            },
+                            "mapper": {
+                                "key": "Log_file_name",
+                                "returnWrapped": false
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 2100,
+                                    "y": 300
+                                },
+                                "restore": {
+                                    "parameters": {
+                                        "datastore": {
+                                            "label": "Email_Body"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "datastore",
+                                        "type": "datastore",
+                                        "label": "Data store",
+                                        "required": true
+                                    }
+                                ],
+                                "expect": [
+                                    {
+                                        "name": "key",
+                                        "type": "text",
+                                        "label": "Key",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "returnWrapped",
+                                        "type": "boolean",
+                                        "label": "Return Wrapped Output",
+                                        "required": true
+                                    }
+                                ],
+                                "interface": [
+                                    {
+                                        "help": "",
+                                        "name": "Body",
+                                        "type": "text",
+                                        "label": null,
+                                        "default": null,
+                                        "required": false,
+                                        "multiline": true
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 888,
+                            "module": "util:SetVariables",
+                            "version": 1,
+                            "parameters": {},
+                            "mapper": {
+                                "scope": "roundtrip",
+                                "variables": [
+                                    {
+                                        "name": "Email_subject",
+                                        "value": "{{if(contains(673.text; \"red\") | contains(673.text; \"Checkflo: NA\"); \"checkflo processing update with failures\"; \"checkflo processing update\")}}"
+                                    }
+                                ]
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 2400,
+                                    "y": 300
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "scope": {
+                                            "label": "One cycle"
+                                        },
+                                        "variables": {
+                                            "items": [
+                                                null
+                                            ]
+                                        }
+                                    }
+                                },
+                                "expect": [
+                                    {
+                                        "name": "variables",
+                                        "spec": [
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Variable name",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "value",
+                                                "type": "any",
+                                                "label": "Variable value"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Variables"
+                                    },
+                                    {
+                                        "name": "scope",
+                                        "type": "select",
+                                        "label": "Variable lifetime",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "roundtrip",
+                                                "execution"
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "interface": [
+                                    {
+                                        "name": "Email_subject",
+                                        "type": "any",
+                                        "label": "Email_subject"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 890,
+                            "module": "microsoft-email:createAndSendAMessage",
+                            "version": 2,
+                            "parameters": {
+                                "__IMTCONN__": 450334
+                            },
+                            "mapper": {
+                                "from": [
+                                    {
+                                        "address": "TimeClockPlus@veritashcsolutions.com"
+                                    }
+                                ],
+                                "content": "<p style=\"margin:0 0 32px 0;\">\n    <a href=\"{{886.Body}}\"\n       style=\"color:#2563eb;text-decoration:underline;font-weight:600;\">\n      View Log File\n    </a>\n</p>\n{{673.text}}\n<br>\n<br>",
+                                "subject": "{{888.Email_subject}}",
+                                "importance": "Normal",
+                                "contentType": "html",
+                                "toRecipients": "{{884.array}}",
+                                "singleValueExtendedProperties": {}
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 2700,
+                                    "y": 300
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "from": {
+                                            "mode": "chose",
+                                            "items": [
+                                                null
+                                            ]
+                                        },
+                                        "replyTo": {
+                                            "mode": "chose"
+                                        },
+                                        "importance": {
+                                            "mode": "chose",
+                                            "label": "Normal Priority"
+                                        },
+                                        "attachments": {
+                                            "mode": "chose"
+                                        },
+                                        "contentType": {
+                                            "mode": "chose",
+                                            "label": "HTML"
+                                        },
+                                        "ccRecipients": {
+                                            "mode": "chose"
+                                        },
+                                        "toRecipients": {
+                                            "mode": "edit"
+                                        },
+                                        "bccRecipients": {
+                                            "mode": "chose"
+                                        },
+                                        "internetMessageHeaders": {
+                                            "mode": "chose"
+                                        }
+                                    },
+                                    "parameters": {
+                                        "__IMTCONN__": {
+                                            "data": {
+                                                "scoped": "true",
+                                                "connection": "azure"
+                                            },
+                                            "label": "Veritas_Sharepoint_Connection (Veritas Reporting)"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "__IMTCONN__",
+                                        "type": "account:azure",
+                                        "label": "Connection",
+                                        "required": true
+                                    }
+                                ],
+                                "expect": [
+                                    {
+                                        "name": "toRecipients",
+                                        "spec": [
+                                            {
+                                                "name": "address",
+                                                "type": "email",
+                                                "label": "Email Address",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Name"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "To Recipients",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "subject",
+                                        "type": "text",
+                                        "label": "Subject",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "content",
+                                        "type": "text",
+                                        "label": "Body Content",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "attachments",
+                                        "spec": [
+                                            {
+                                                "name": "filename",
+                                                "type": "filename",
+                                                "label": "File Name",
+                                                "required": true,
+                                                "semantic": "file:name"
+                                            },
+                                            {
+                                                "name": "data",
+                                                "type": "buffer",
+                                                "label": "Data",
+                                                "required": true,
+                                                "semantic": "file:data"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Attachments"
+                                    },
+                                    {
+                                        "name": "replyTo",
+                                        "spec": [
+                                            {
+                                                "name": "address",
+                                                "type": "email",
+                                                "label": "Email Address",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Name"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Reply To"
+                                    },
+                                    {
+                                        "name": "from",
+                                        "spec": [
+                                            {
+                                                "name": "address",
+                                                "type": "email",
+                                                "label": "Email Address",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Name"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "From",
+                                        "validate": {
+                                            "maxItems": 1
+                                        }
+                                    },
+                                    {
+                                        "name": "ccRecipients",
+                                        "spec": [
+                                            {
+                                                "name": "address",
+                                                "type": "email",
+                                                "label": "Email Address",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Name"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "CC Recipients"
+                                    },
+                                    {
+                                        "name": "bccRecipients",
+                                        "spec": [
+                                            {
+                                                "name": "address",
+                                                "type": "email",
+                                                "label": "Email Address",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Name"
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Bcc Recipients"
+                                    },
+                                    {
+                                        "name": "importance",
+                                        "type": "select",
+                                        "label": "Importance",
+                                        "validate": {
+                                            "enum": [
+                                                "Low",
+                                                "Normal",
+                                                "High"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "internetMessageHeaders",
+                                        "spec": [
+                                            {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Name",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "value",
+                                                "type": "text",
+                                                "label": "Value",
+                                                "required": true
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Internet Message Headers"
+                                    },
+                                    {
+                                        "name": "contentType",
+                                        "type": "select",
+                                        "label": "Body Content Type",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "html",
+                                                "text"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "singleValueExtendedProperties",
+                                        "spec": [
+                                            {
+                                                "name": "sensitivityLabel",
+                                                "type": "text",
+                                                "label": "Sensitivity Label"
+                                            }
+                                        ],
+                                        "type": "collection",
+                                        "label": "Extended MAPI Properties"
+                                    }
+                                ],
+                                "advanced": true
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "metadata": {
+        "instant": true,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "slots": null,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": true,
+            "freshVariables": false
+        },
+        "designer": {
+            "orphans": []
+        },
+        "zone": "us2.make.com",
+        "notes": []
+    }
+}
