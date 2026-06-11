@@ -5027,7 +5027,7 @@
                                             "mapper": {
                                                 "key": "body",
                                                 "data": {
-                                                    "Body": "{{900.Body}}<br>\nBatch # {{254.values.`0`}}<br>\nBank name: {{89.data.bankAlias}}<br>\nStatus: Custom fields missing <br>"
+                                                    "Body": "{{900.Body}}<br>\nBatch # {{254.values.`0`}}<br>\nBank name: {{89.data.bankAlias}}<br>\nTotal checks processed in Checkflo: NA<br>\nTotal checks posted in Intacct: NA<br>\nVariance: NA<br>\nAmount of checks paid from checkflo: NA<br>\nAmount of record transfer processed in intact: NA<br>\nVariance: NA <br>"
                                                 },
                                                 "upsert": false,
                                                 "overwriteArrays": false
