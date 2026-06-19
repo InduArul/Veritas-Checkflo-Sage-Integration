@@ -1,0 +1,7 @@
+{
+  "_comment": "Copy this file to config.json and fill it in. config.json is gitignored. Env vars MAKE_API_TOKEN / MAKE_ZONE / MAKE_TEAM_ID override these values.",
+  "token": "PASTE_MAKE_API_TOKEN_HERE",
+  "zone": "eu2",
+  "team_id": "123456",
+  "org_id": ""
+}

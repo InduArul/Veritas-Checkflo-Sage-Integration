@@ -8,3 +8,8 @@ Desktop.ini
 
 # Local notes not meant for the repo
 /scratch/
+
+# Make API toolkit — secrets and live-blueprint backups (NEVER commit)
+/.make/config.json
+/.make/backups/
+__pycache__/
