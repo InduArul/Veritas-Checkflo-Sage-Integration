@@ -73,7 +73,8 @@ samples as live data.
 | Module | Role |
 |---|---|
 | `builtin:BasicRouter` | branches into `routes[].flow[]` |
-| `builtin:Iterator` | **fan-out**: splits an array into one bundle per element |
+| `builtin:BasicFeeder` | **the Iterator** — fan-out: splits an `array` into one bundle per element (mapper field `array`). **There is NO `builtin:Iterator` slug** — push rejects it with IM007. |
+| `builtin:BasicRepeater` | Repeater — generates N bundles from nothing (counter `i`) |
 | `builtin:BasicAggregator` | **this IS the "Array Aggregator"** — collapse many bundles → ONE bundle with an `array`. `parameters.feeder` = the **Source Module** (aggregation boundary). With `flags.groupBy` it instead emits one bundle per key (see below). **There is NO separate `builtin:ArrayAggregator` slug.** Aggregators do **not** forward upstream/source data — you must explicitly map the fields you want into the aggregated element. |
 | `util:TextAggregator` / `util:NumericalAggregator` / `util:TableAggregator` | other aggregator types (string / number / table) |
 | `util:SetVariables` / `util:GetVariables` | store/read named variables |

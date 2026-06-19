@@ -175,9 +175,15 @@ Repo: D:\Claude\Veritas_MAKE\Sage_Integration_project
    builtin:ArrayAggregator); IML has NO filter() function; map() is case-sensitive/
    single-key (so use Iterator+existing aggregator to preserve case-insensitive OR match).
 
+LESSON (live push validates what static QA cannot): first push failed IM007
+"Module not found 'builtin:Iterator'". The Iterator's real slug is builtin:BasicFeeder
+(mapper field `array`); Array Aggregator is builtin:BasicAggregator. Neither
+builtin:Iterator nor builtin:ArrayAggregator exist. The `gate` command now flags both.
+
 OPEN / NEXT ACTIONS
-   [ ] Upload CSV fix: LIVE-verify in Make (run once -> logs/dlqs clean), then push via
-       `make_cli.py push 4492713 scratch/UploadCSV_to_Checkflo_v0.1.FIXED.blueprint.json --yes`.
+   [x] Upload CSV fix PUSHED live to 4492713 (2026-06-19). Live == FIXED (qa-diff clean).
+       Rollback: .make/backups/4492713-20260619-144328.json, or Make version history.
+       PENDING: monitor the next real run's logs/dlqs to confirm no 503 + accurate report.
    [ ] Rotate exposed Make API token; update .env.
    [ ] Confirm Empres bill 35505383 root cause via support files / mapping worksheet;
        decide fix (mapping-worksheet add vs module-438 RECORDID->RECORDNO).

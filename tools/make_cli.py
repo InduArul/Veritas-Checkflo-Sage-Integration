@@ -394,7 +394,11 @@ def cmd_qa_diff(cfg, args):
 # ----------------------------------------------------------------------------- QA gate (deep)
 AGG_SLUGS = {"builtin:BasicAggregator", "util:TextAggregator",
              "util:NumericalAggregator", "util:TableAggregator"}
-INVALID_SLUGS = {"builtin:ArrayAggregator"}  # not a real Make slug (use builtin:BasicAggregator)
+# slugs that look plausible but do NOT exist in Make blueprints (rejected on push, IM007)
+INVALID_SLUGS = {
+    "builtin:ArrayAggregator": "use builtin:BasicAggregator",
+    "builtin:Iterator": "use builtin:BasicFeeder",
+}
 _INTERNAL_PREFIXES = ("builtin:", "util:", "json:", "csv:", "xml:", "regexp:",
                       "text:", "gateway:", "tools:", "math:")
 _BRACE_RE = re.compile(r"\{\{(.*?)\}\}", re.S)
@@ -440,11 +444,11 @@ def gate_blueprint(bp, baseline=None):
         if level != "INFO":
             add(level, "STRUCT", msg)
 
-    # invalid / non-existent slugs
+    # invalid / non-existent slugs (would be rejected on push with IM007)
     for m in mods:
-        if m.get("module") in INVALID_SLUGS:
-            add("ERROR", "SLUG", f"[{m.get('id')}] invalid slug '{m.get('module')}' "
-                                 "(Array Aggregator == builtin:BasicAggregator)")
+        slug = m.get("module")
+        if slug in INVALID_SLUGS:
+            add("ERROR", "SLUG", f"[{m.get('id')}] invalid slug '{slug}' - {INVALID_SLUGS[slug]}")
 
     # reference integrity - the big one: dangling {{id.field}}
     for rid, n in sorted(collect_referenced_ids(bp).items()):
