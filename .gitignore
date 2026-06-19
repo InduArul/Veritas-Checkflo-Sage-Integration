@@ -13,3 +13,6 @@ Desktop.ini
 /.make/config.json
 /.make/backups/
 __pycache__/
+
+# Local Claude Code settings (machine-specific)
+/.claude/settings.local.json

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-make_cli.py — A zero-dependency CLI to connect this repo to the Make.com REST API.
+make_cli.py - A zero-dependency CLI to connect this repo to the Make.com REST API.
 
 Capabilities
   read scenarios   :  scenarios | get | pull
@@ -30,6 +30,7 @@ Examples:
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -182,11 +183,12 @@ def team_or_org_query(cfg):
 
 
 def collect_modules(flow, acc):
-    """Recursively collect modules from a Make blueprint flow (handles routers)."""
+    """Recursively collect modules from a Make blueprint flow (routers + error handlers)."""
     for mod in flow or []:
         acc.append(mod)
         for route in mod.get("routes", []) or []:
             collect_modules(route.get("flow", []), acc)
+        collect_modules(mod.get("onerror", []) or [], acc)   # descend into error handlers too
     return acc
 
 
@@ -195,7 +197,7 @@ def cmd_doctor(cfg, args):
     require(cfg, "token", "zone")
     me = api(cfg, "GET", "/users/me")
     user = me.get("authUser") or me.get("user") or me
-    print("OK — authenticated to Make.")
+    print("OK - authenticated to Make.")
     print(f"  zone   : {cfg['zone']}.make.com")
     print(f"  user   : {user.get('email') or user.get('name') or user}")
     print(f"  team   : {cfg.get('team_id') or '(unset)'}")
@@ -253,7 +255,7 @@ def cmd_log(cfg, args):
 
 
 def cmd_dlqs(cfg, args):
-    # Incomplete executions (Data Loss Queue) — the most useful view for failures.
+    # Incomplete executions (Data Loss Queue) - the most useful view for failures.
     res = api(cfg, "GET", "/dlqs",
               query={"scenarioId": args.scenario_id, "pg[limit]": args.limit})
     rows = res.get("dlqs", res)
@@ -389,6 +391,151 @@ def cmd_qa_diff(cfg, args):
         print("\n  WARNING: removing modules can break downstream mappings/webhook wiring.")
 
 
+# ----------------------------------------------------------------------------- QA gate (deep)
+AGG_SLUGS = {"builtin:BasicAggregator", "util:TextAggregator",
+             "util:NumericalAggregator", "util:TableAggregator"}
+INVALID_SLUGS = {"builtin:ArrayAggregator"}  # not a real Make slug (use builtin:BasicAggregator)
+_INTERNAL_PREFIXES = ("builtin:", "util:", "json:", "csv:", "xml:", "regexp:",
+                      "text:", "gateway:", "tools:", "math:")
+_BRACE_RE = re.compile(r"\{\{(.*?)\}\}", re.S)
+# a module reference inside {{...}}: an integer followed by ".field" - not a decimal,
+# and the field starts with a letter/underscore/backtick (e.g. 70.`__IMTKEY__`, 313.values)
+_REF_RE = re.compile(r"(?<![\d.])(\d+)\.(?=[A-Za-z_`])")
+
+
+def _iter_strings(obj):
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            yield from _iter_strings(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _iter_strings(v)
+
+
+def collect_referenced_ids(bp):
+    """Module ids referenced via {{id.field}} anywhere in the blueprint -> {id: count}."""
+    refs = {}
+    for s in _iter_strings(bp):
+        if "{{" not in s:
+            continue
+        for blk in _BRACE_RE.findall(s):
+            for m in _REF_RE.finditer(blk):
+                rid = int(m.group(1))
+                refs[rid] = refs.get(rid, 0) + 1
+    return refs
+
+
+def gate_blueprint(bp, baseline=None):
+    """Deep static checks. Returns (findings[(level,code,msg)], module_count)."""
+    findings = []
+    add = lambda lvl, code, msg: findings.append((lvl, code, msg))
+
+    mods = collect_modules(bp.get("flow", []), [])
+    idset = {m.get("id") for m in mods}
+
+    # structural (reuse qa, drop its INFO line)
+    for level, msg in qa_blueprint(bp):
+        if level != "INFO":
+            add(level, "STRUCT", msg)
+
+    # invalid / non-existent slugs
+    for m in mods:
+        if m.get("module") in INVALID_SLUGS:
+            add("ERROR", "SLUG", f"[{m.get('id')}] invalid slug '{m.get('module')}' "
+                                 "(Array Aggregator == builtin:BasicAggregator)")
+
+    # reference integrity - the big one: dangling {{id.field}}
+    for rid, n in sorted(collect_referenced_ids(bp).items()):
+        if rid not in idset:
+            add("ERROR", "REF", f"{n} reference(s) to {{{{{rid}.…}}}} but module [{rid}] does not exist")
+
+    # aggregator boundary (Source Module / feeder)
+    for m in mods:
+        if m.get("module") in AGG_SLUGS:
+            feeder = (m.get("parameters") or {}).get("feeder")
+            if feeder is None:
+                add("ERROR", "AGG", f"[{m.get('id')}] {m.get('module')} has no Source Module (feeder)")
+            elif feeder not in idset:
+                add("ERROR", "AGG", f"[{m.get('id')}] aggregator feeder [{feeder}] does not exist")
+
+    # variable usage (best-effort)
+    set_vars, get_uses = set(), []
+    for m in mods:
+        mp = m.get("mapper") or {}
+        if m.get("module") == "util:SetVariables":
+            for v in mp.get("variables", []) or []:
+                if isinstance(v, dict) and v.get("name"):
+                    set_vars.add(v["name"])
+        elif m.get("module") == "util:GetVariables":
+            for v in mp.get("variables", []) or []:
+                name = v if isinstance(v, str) else (v.get("name") if isinstance(v, dict) else None)
+                if name:
+                    get_uses.append((m.get("id"), name))
+    for mid, name in get_uses:
+        if name not in set_vars:
+            add("WARN", "VAR", f"[{mid}] GetVariables reads '{name}' which no SetVariables sets")
+
+    # external calls without error handlers (advisory)
+    ext_no_handler = [m.get("id") for m in mods
+                      if (m.get("module") or "") and not m["module"].startswith(_INTERNAL_PREFIXES)
+                      and not m.get("onerror")]
+    if ext_no_handler:
+        add("INFO", "RESIL", f"{len(ext_no_handler)} external-call module(s) with no onerror handler "
+                             f"(review D1 for any inside a loop): {ext_no_handler[:15]}")
+
+    # diff-aware (visibility of deletions/additions vs a baseline)
+    if baseline is not None:
+        base_ids = {m.get("id") for m in collect_modules(baseline.get("flow", []), [])}
+        removed = sorted(i for i in base_ids - idset if i is not None)
+        added = sorted(i for i in idset - base_ids if i is not None)
+        if removed:
+            add("INFO", "DIFF", f"removed vs baseline: {removed}")
+        if added:
+            add("INFO", "DIFF", f"added vs baseline: {added}")
+    return findings, len(mods)
+
+
+MANUAL_CHECKS = [
+    "C1 run-once: any 'fetch once' module sits BEFORE the fan-out (iterator/groupBy aggregator)?",
+    "C2 scope: data cached for in-loop use is execution-scoped (not 'one cycle')?",
+    "C4 match logic: in-memory lookup reproduces the same field(s)+operators (case/trim)?",
+    "E1 output: downstream columns/fields/order unchanged?",
+    "E2 filters: row-skip filters (e.g. TOPLEVEL / petty cash) preserved?",
+    "D3 logging: business counters / log writes preserved or consciously dropped?",
+    "LIVE: run once in Make, then `logs`/`dlqs` clean - the only true behavioral proof.",
+]
+
+
+def cmd_gate(cfg, args):
+    with open(args.file, "r", encoding="utf-8") as f:
+        try:
+            bp = json.load(f)
+        except json.JSONDecodeError as e:
+            die(f"Invalid JSON in {args.file}: {e}")
+    baseline = None
+    if args.baseline:
+        with open(args.baseline, "r", encoding="utf-8") as f:
+            baseline = json.load(f)
+    findings, nmods = gate_blueprint(bp, baseline)
+    rank = {"ERROR": 0, "WARN": 1, "INFO": 2}
+    for level, code, msg in sorted(findings, key=lambda x: rank.get(x[0], 9)):
+        print(f"  [{level:<5}] {code:<6} {msg}")
+    n_err = sum(1 for f in findings if f[0] == "ERROR")
+    n_warn = sum(1 for f in findings if f[0] == "WARN")
+    print("-" * 72)
+    print(f"{os.path.basename(args.file)}: {nmods} modules | {n_err} error(s), {n_warn} warning(s)")
+    print("\nMANUAL CHECKS (not automatable - confirm before push):")
+    for c in MANUAL_CHECKS:
+        print(f"  [ ] {c}")
+    print("-" * 72)
+    if n_err:
+        print("GATE: FAIL - fix errors above before push.")
+        sys.exit(2)
+    print("GATE: PASS (automated) - complete manual checks + a live run before push.")
+
+
 # ----------------------------------------------------------------------------- argparse
 def build_parser():
     p = argparse.ArgumentParser(prog="make_cli", description="Make.com API CLI for this repo.")
@@ -441,13 +588,17 @@ def build_parser():
     s.add_argument("old")
     s.add_argument("new")
 
+    s = sub.add_parser("gate", help="comprehensive QA gate: deep static checks + manual checklist")
+    s.add_argument("file")
+    s.add_argument("--baseline", help="compare against this baseline blueprint (diff-aware checks)")
+
     return p
 
 
 COMMANDS = {
     "doctor": cmd_doctor, "scenarios": cmd_scenarios, "get": cmd_get, "pull": cmd_pull,
     "logs": cmd_logs, "log": cmd_log, "dlqs": cmd_dlqs, "dlq": cmd_dlq, "run": cmd_run,
-    "push": cmd_push, "qa": cmd_qa, "qa-diff": cmd_qa_diff,
+    "push": cmd_push, "qa": cmd_qa, "qa-diff": cmd_qa_diff, "gate": cmd_gate,
 }
 
 

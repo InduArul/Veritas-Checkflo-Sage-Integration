@@ -1,0 +1,188 @@
+================================================================================
+MEMORY LOG
+Project: Checkflo -> Sage Intacct Integration (Make.com)
+Repo: D:\Claude\Veritas_MAKE\Sage_Integration_project
+================================================================================
+
+--------------------------------------------------------------------------------
+2026-06-19
+--------------------------------------------------------------------------------
+
+1) BUILT A MAKE.COM API TOOLKIT (tools/make_cli.py)
+   - Zero-dependency Python 3 CLI (stdlib only; no pip, no jq) that connects the
+     repo to the live Make.com scenarios via the REST API.
+   - Capabilities:
+       read scenarios : scenarios | get | pull
+       read run logs  : logs | log | dlqs | dlq
+       edit scenarios : push  (auto-backs up live blueprint first; needs --yes)
+       QA scenarios   : qa | qa-diff | run
+       connectivity   : doctor
+   - Config: reads .env or .make/config.json. Supports MAKE_VERITAS_* keys,
+     "KEY=value" and "KEY:\"value\"" formats, and parent-dir .env lookup.
+       * .env location used: D:\Claude\Veritas_MAKE\.env  (parent of repo)
+   - Cloudflare fix: sends a browser User-Agent (default urllib UA was banned,
+     error 1010).
+   - Secrets & live-blueprint backups are gitignored (.make/config.json,
+     .make/backups/, __pycache__/).
+   - Docs: tools/README.md ; template: .make/config.example.json
+   - Committed: a90fed2 "Add Make.com API toolkit for live scenario read/edit/QA"
+     (5 files, 537 insertions). CHANGELOG.md updated.
+
+2) CONNECTION DETAILS (Make.com)
+   - Zone: us2.make.com
+   - User: cpantierer@veritashcsolutions.com
+   - Organization: "Veritas Healthcare Solutions"  ORG ID = 1903574
+   - Team: "My Team"  TEAM ID = 33002
+   - IMPORTANT FIX: the .env originally had the ORG id (1903574) in the TEAM_ID
+     slot, which caused SC403 on /scenarios. Corrected .env to:
+         MAKE_VERITAS_TEAM_ID = 33002
+         MAKE_VERITAS_ORG_ID  = 1903574
+   - SECURITY TODO: the API token was exposed in plaintext during setup.
+     Rotate it in Make (Profile -> API/MCP access) and update the .env key
+     MAKE_VERITAS_API_TOKEN.
+
+3) PROJECT1 SCENARIO -> LIVE ID MAP (Checkflo Sage Integration, 7 parts)
+       Part 1 MoWeSa  ............ 5127317
+       Part 1 TuThFr  ............ 5237201   (inactive dup: 5412901)
+       Part 2 Main processing ... 5128270
+       Part 3 Fetch Vendor Det .. 5203224
+       Part 4 Negative Checks ... 5152139
+       Part 5 Looping All Inv ... 5152516
+       Part 6 Intacct Posting ... 5171324
+       Part 7 Reporting ......... 5171262
+   - NOTE: Part 2 most recent run 2026-06-18 21:31 UTC came back status "2"
+     (errored/warning) - NOT yet investigated.
+
+4) PROJECT2 SCENARIO -> LIVE ID MAP (Checkflo Input file creation automation)
+       Trigger_Empres_8:30AM .... 5254692
+       Trigger_Evergreen_7:30AM . 5253402
+       Trigger_Livewell_8:00AM .. 5254638
+       v9.0 (main worker) ....... 4037643
+   - Triggers are thin launchers: read Excel "Env_List" (CheckFlo_BatchID_Tracker.xlsx),
+     filter by File_name (e.g. "Empres"), POST {Env_name, File_name} to v9.0 webhook.
+
+5) CLIENT QUESTION INVESTIGATED (Empres) - Bill 35505383
+   Q: "Why was bill 35505383 not assigned to Firesteel?"
+   Facts: Vendor V00069 "Direct Supply", $106.20. Intacct GL line Location =
+   "170--Firesteel Healthcare Center". Bill CREATED AT TOP LEVEL (header has no
+   entity). Output file showed Facility = "TOPLEVEL", Entity = "TOPLEVEL TOPLEVEL".
+
+   HOW v9.0 ASSIGNS FACILITY:
+     - Default: from MEGAENTITYNAME (entity the bill was CREATED AT).
+       Module 408 (query APBILL header) -> 410. Top-level bills return blank
+       -> renders "TOPLEVEL". No location read here.
+     - Fallback for blank/top-level rows: router 417 "When Location is Empty or EVG"
+       -> module 438 queries APBILLITEM (LINE items) for LOCATIONNAME, matched by
+       RECORDID IN (...) -> 452 parse -> 445/446 Power Automate "top level location
+       update" writes it to Bills tab -> 458/461 + 453/377 map LOCATIONNAME to a
+       facility via FacilityMapping.json (Excel Location/Mapping worksheet).
+
+   ROOT CAUSE (read-only analysis; design DOES read line location, so my first
+   "header-only" guess was WRONG):
+     The bill was created at TOP LEVEL, so it depends on the fragile fallback,
+     which failed to resolve Firesteel. Two break points:
+       (1) Module 438 matches purely on RECORDID (bill DOCUMENT number, not the
+           unique RECORDNO). Document numbers can collide across entities/years and
+           multi-line bills return multiple locations -> wrong/empty match. Saved
+           sample shows 35505383 -> "Conestoga View SNF Operations LLC" (NOT
+           Firesteel) [caveat: that sample is from an Evergreen run].
+       (2) Returned location may not exist in FacilityMapping (Location/Mapping
+           worksheet), so it can't translate -> cell stays "TOPLEVEL".
+     Output literally "TOPLEVEL" => overwrite never landed for this row.
+   UPSTREAM CAUSE to flag to client: bill was ENTERED at Top Level in Intacct
+   instead of under the Firesteel entity.
+
+   RECOMMENDED FIXES (not yet applied):
+     - Quick: add Firesteel location row to the Location->Mapping worksheet.
+     - Robust: change module 438 match key from RECORDID -> RECORDNO (unique),
+       and handle multi-line bills deterministically.
+
+   TO CONFIRM DEFINITIVELY (still pending):
+     - Get latest Empres_toplevelrecords.json + Empres_FacilityMapping.json from
+       SharePoint (.../CheckFlo API/Check files/Support files), and/or
+     - Check whether Location->Mapping worksheet has a "Firesteel" / "170" row.
+
+   KEY MODULE REFERENCE (v9.0 / id 4037643):
+     408 APBILL header query (default MEGAENTITYNAME); 410 parser
+     414 router; 417 "When Location is Empty or EVG" fallback
+     436 getAPISession; 437 builds array_of_recordid
+     438 APBILLITEM line query (RECORDID,LOCATIONNAME; filter RECORDID IN); 452 parser
+     440/444/445 aggregate->JSON->upload {Env}_toplevelrecords.json
+     446 PA "top level location update" (Bills tab)
+     458 Excel Location/Mapping source; 461 upload {Env}_FacilityMapping.json
+     453 PA "Bills_entity_update"; 377 PA "update facility and status in Payments tab"
+
+6) UPLOAD CSV TO CHECKFLO v0.1 (id 4492713) - 503 "failed fetching location name"
+   Run 2026-06-18 11:43 AM ET = 15:43:17Z (execution e38d6bf...; status 1/OK).
+   ERROR observed in UI: type ConnectionError, "[503] We're sorry...". This is a
+   transient Microsoft Graph/SharePoint 503 (Server Too Busy) on module 177
+   (microsoft-excel:listTableRows of Bank_Table), called ONCE PER GROUP inside the
+   groupBy-aggregator loop (module 70, groupBy {{8.col1}}).
+
+   CORRECTED ROOT CAUSE (my earlier "it retried and recovered" was WRONG):
+   - Module 177 has NO retry on itself. Its onerror chain = [241 GetVar read counter,
+     242 addATableRow "Error reading the Mapping file", 244 makeApiCall rename file to
+     "_failed.csv", 243 SetVar increment No_of_files_process_failed]. The only Break
+     retry (266, retry 3x/1min) is nested as the onerror of 244 (the RENAME step), not
+     the lookup.
+   - So a 503 on the lookup is NOT retried; it is logged as a FAILED file (counter++,
+     file renamed _failed.csv). The throttle also typically OUTLASTS short retries
+     (Graph/SharePoint throttle windows can be minutes; retrying w/o honoring
+     Retry-After can EXTEND them).
+   - Net: transient Microsoft blips were being mis-reported as failed files.
+
+   THE FIX (built, QA-passed; NOT pushed) - "fetch Bank_Table once":
+     scratch/build_fix_uploadcsv.py -> scratch/UploadCSV_to_Checkflo_v0.1.FIXED.blueprint.json
+   - ROOT flow, after module 175 (runs once):
+       [313] microsoft-excel:listTableRows Bank_Table (all rows; onerror Break retry
+             5x/2min) -> [314] builtin:BasicAggregator (Array Aggregator, feeder=313,
+             no Group By, element {values:{...}} preserves shape) -> [315]
+             util:SetVariables scope=execution Bank_Table_all = {{314.array}}.
+   - IN-LOOP: [177] retyped microsoft-excel:listTableRows -> builtin:Iterator over
+       {{315.Bank_Table_all}} (keeps TOPLEVEL/petty-cash filter; onerror 241-244 dropped).
+   - 179 (feeder 177) + 295 unchanged; {{177.values.`4`/`5`}} still resolve.
+   - Result: Bank_Table Graph calls N -> 1; no 503; records no longer false-failed.
+
+   D3 (report dependency) RESOLVED - SAFE to drop 241-244:
+   - Counters No_of_files_process_successful / _failed / _partial_failed are init in
+     module 118 (=0), incremented in ~7 OTHER handlers (235,228,119,186,75,127,...),
+     and READ for the downstream report (module 75 etc.; filter checks failed!=0).
+   - 241-244 fired ONLY on the Excel API error (503), which the in-memory fix
+     eliminates. The "no bank match" case is handled SEPARATELY downstream: module 255
+     Bank_Name_alias_Checkflo = if(Arr_length>0; Location_name; if TOPLEVEL/petty -> alias;
+     else empty); empty -> do_not_process=1 + No_of_files_process_failed++ (modules
+     119/186). So unmatched banks are still counted/reported; nothing lost.
+   - FAIL-SAFE: if 313 ultimately fails -> Bank_Table_all empty -> every record hits the
+     empty path -> all marked failed + nothing uploaded -> batch fails LOUD, never
+     silent-bad-data. (Removing 241-244 is safe ONLY because 177 is now in-memory; a
+     503 on a still-live Excel call with no handler would crash the whole run.)
+   - STILL PENDING: live run in Make + check logs/dlqs (only true behavioral proof).
+
+7) QA GATE built in tools/make_cli.py: new `gate` command + collect_modules now
+   traverses onerror (so qa/qa-diff see error-handler modules).
+     python tools/make_cli.py gate FILE [--baseline OLD]
+   Automated (FAIL/exit 2 on error): JSON/structure, unique ids, REFERENCE INTEGRITY
+   ({{id.field}} must exist - proven by catching a deleted-315 break), aggregator
+   Source Module/feeder validity, invalid slugs (e.g. builtin:ArrayAggregator), variable
+   set/get usage, diff-vs-baseline. Prints MANUAL checklist (C1 run-once, C2 scope,
+   C4 match fidelity, E1/E2 output+filters, D3 logging, LIVE run) it cannot mechanize.
+   FIXED blueprint => GATE: PASS.
+
+8) SKILL: .claude/skills/make-integration/ (SKILL.md + reference/api-and-toolkit.md,
+   blueprint-anatomy.md, troubleshooting.md, review-checklist.md). Provenance-labeled
+   [VERIFIED]/[MS-LEARN]/[DOC]. Reconciled against the official `make-skills` plugin
+   (v0.1.7): corrected my errors - Array Aggregator slug is builtin:BasicAggregator (NOT
+   builtin:ArrayAggregator); IML has NO filter() function; map() is case-sensitive/
+   single-key (so use Iterator+existing aggregator to preserve case-insensitive OR match).
+
+OPEN / NEXT ACTIONS
+   [ ] Upload CSV fix: LIVE-verify in Make (run once -> logs/dlqs clean), then push via
+       `make_cli.py push 4492713 scratch/UploadCSV_to_Checkflo_v0.1.FIXED.blueprint.json --yes`.
+   [ ] Rotate exposed Make API token; update .env.
+   [ ] Confirm Empres bill 35505383 root cause via support files / mapping worksheet;
+       decide fix (mapping-worksheet add vs module-438 RECORDID->RECORDNO).
+   [ ] Investigate Part 2 (5128270) status "2" run from 2026-06-18 21:31 UTC.
+   [ ] scratch/ (gitignored) holds: build_fix_uploadcsv.py, *.FIXED.blueprint.json,
+       pulled blueprints (Project2_Empres_Trigger, Project2_v9.0_main, UploadCSV).
+
+================================================================================
