@@ -5,6 +5,103 @@ Repo: D:\Claude\Veritas_MAKE\Sage_Integration_project
 ================================================================================
 
 --------------------------------------------------------------------------------
+2026-06-20
+--------------------------------------------------------------------------------
+
+A) CREDIT / OPERATIONS UTILIZATION ANALYSIS (Make.com billing)
+   - PLAN: 300K ops/month included; 600K hard ceiling (pay-as-you-go). Billing
+     cycle = 26th -> 25th of next month. autoPurchasingActivated = TRUE (overages
+     auto-billed silently -> why earlier overages were never "notified").
+   - The org license currently shows operations=3,600,000 / 1-year reset, BUT that
+     is a TEMPORARY 2-week emergency grant from Make support after they ran out.
+     IGNORE 3.6M as the real allowance. lastReset 2026-06-19 (counter reset then).
+   - METRIC TRAP (important): the BI dashboard "Sum of Ops Consumed" runs ~2x the
+     real BILLABLE operations (measured per-scenario: Part5 1.8x, Intaact daily 2.4x,
+     Part2 2.0x, CreateCSV 1.78x). The dashboard GAUGE (604K) ~= billable; the
+     stacked-chart "Ops Consumed" tooltips are inflated. So 22.0's "1.4-1.6M/mo"
+     dashboard figure is NOT billable (~700-900K billable, unverifiable). For billing
+     truth use Make's own usage/API, divide dashboard "Ops Consumed" by ~2.
+     Operations == credits/100 (1 op = 100 centicredits; same meter, finer unit).
+   - CURRENT-CYCLE BILLABLE (live scenarios_list snapshot, pulled 2026-06-20):
+     total 715,606 ops. Top: Part5 Loop 183,071 (4,852 exec); Intaact daily 129,597;
+     Part3 Vendor 82,685 (4,831); Part2 Main 68,428 (259); 22.0 RESIDUAL 51,640
+     (deactivated but ran into early June - confirm fully off); Upload CSV 37,785;
+     Part6 34,740 (3,515); Part4 25,330 (4,946). Project1 Part1-7 combined = 409,962.
+   - OLD vs NEW: checkflo_Sage Integration 22.0 (monolith, id 4110999) RETIRED;
+     replaced by Part1-7 modular pipeline. ~70% reduction in dashboard terms; exact
+     billable old-figure NOT recoverable (22.0 retired + 30-day log retention).
+   - Sub-scenario fan-out: Part2 loops each CHECK (~19/batch, ~4,900 checks/cycle)
+     and per check calls Part3+Part4+Part5(+Part6) via HTTP webhooks -> ~84 ops/check
+     end-to-end. That fan-out is the biggest leak ("Leak A").
+
+B) LEAK A OPTIMIZATION PROJECT (0% functional change; structural only)
+   Goal: cut ops by removing the per-check webhook plumbing. Committed work:
+   - QA CHECKLIST: docs/QA_Structural_Refactor_Checklist.md - reusable gate for
+     structural-only refactors. Control #1 = the "limit=10" blank->default trap (a
+     blank field must NEVER gain Make's UI default; that exact bug shipped before).
+   - PARITY GATE: tools/parity_diff.py - module-by-module blueprint comparator
+     (params/mapper/filter/flags); flags blank->default; id or --by-name matching;
+     exit 1 on HIGH/MEDIUM. Self-tested (caught injected limit=10).
+   - GOLDEN BASELINE: baseline/leakA_2026-06-20/ (live blueprints, SAMPLES STRIPPED -
+     live pull embeds Sage creds + bank PII in metadata.designer.samples; always
+     scrub before commit). + BASELINE.md (must-beat 409,962) + scheduling.json
+     (Part1 MoWeSa polls 3h days Mo/We/Sa; Part1 TuThFr polls 2h days Tu/Th/Fr -
+     DIFFERENT intervals; Part2-7 webhook immediate, maxRuns 100).
+   - GOLDEN RUN (live bundles): scratch/golden_run_2026-06-20/ (GITIGNORED - has
+     creds/PII). 3 real Part2 DLQ bundles (~1MB) via /dlqs/{id}/bundle (CLI only
+     returns metadata; bundle blob needs that endpoint). Make API gives NO bundle I/O
+     for SUCCESSFUL runs (UI-only). Also: Part2 has recurring DLQ "Missing value of
+     required parameter 'id'" since 2026-05-29 (fix alongside Leak A).
+   - DESIGN: docs/LeakA_Target_Design.md. Chosen Option B = merge Part3+4+5 into ONE
+     sub-scenario Part_345, called ONCE/check (was 3x). Keep internal data-stores
+     AS-IS (Leak B = datastore-as-message-bus deferred to a later pass).
+
+   BUILD (committed 2a19d58, leakA_refactor/) - STATIC-VERIFIED, NOT Staging-tested:
+   - compose_p345.py + wire_part2.py: deterministic builders from baseline/.
+     candidates/Part_345_CheckProcessing.blueprint.json (merged, 135 mods, 1 trigger,
+     4 responds) and candidates/Part2_Main_WIRED.blueprint.json (3 calls -> 1).
+   - MERGE MECHANICS: renumber Part4 +10000 / Part5 +20000; single trigger 918
+     (=Part3's); rewire Part4/Part5 trigger refs (ambient->918, inter-stage->producer
+     modules). Carried Part2 glue INTO Part_345: [974] SetVars (repointed to producers),
+     [975] json-transform + stop gate, [355] datastore temp_var reset (repointed
+     926->10926). Seams: Part4 spliced where Part3 responded (967); Part5 where Part4
+     responded (10927). Aggregator 10490 collapses neg-invoice loop so Part5 runs
+     ONCE/check.
+   - FINAL-RESPOND union schema (Part2 consumes ALL of it): {Vendor_id,
+     Total_check_amount, Simple_array_of_json, route1..4, stop_check_processing,
+     accum_invoice_amt/amount/amout}. Responds: 20935 success, 32001 stop-after-Vendor,
+     32002 stop-after-NegChecks, 971 fallback (normalized). Filtered responds give
+     exactly-one-respond/path; stop=1 -> respond+exit, stop!=1 -> continue.
+   - PART2 WIRING: 965 URL -> Part_345 (placeholder REPLACE_WITH_PART_345_WEBHOOK);
+     delete 923/355/929; repoint 923.data/929.data -> 965.data. 975's existing stop!=1
+     filter now reads FINAL stop (via 974<-965.data) and preserves "skip post-call on
+     stop" - NO new gate needed. NOTE: Part2 uses 974/975 downstream in [962] Sage
+     posting + [834] log + routers 1003/157 (that's why response had to be the UNION,
+     not just Part5's schema - a real mid-build finding).
+   - VERIFIED: 0 dangling; parity HIGH only on intended changes (Part_345: the 971
+     normalization; Part2: 965 URL + 923/929.data repoints; 0 unexpected); integration
+     contract satisfied (Part2 reads ⊆ Part_345 provides); make_cli qa clean; secrets
+     clean. Est. savings ~30-44K ops/cycle.
+   - REPRODUCE: python leakA_refactor/compose_p345.py ; python leakA_refactor/wire_part2.py
+
+   LESSON (static parity is necessary, not sufficient): the green parity checkmarks
+   proved module PARAMS unchanged, but reviews caught real WIRING/control-flow bugs
+   parity can't see - (1) Checkpoint 1 skipped the [975] transform + stop gate;
+   (2) the response schema was incomplete until I traced Part2's downstream 974/975
+   use. Always examine the real Part2 boundary BEFORE building each seam, and validate
+   runtime equivalence in Staging.
+
+   OPEN / NEXT (Leak A):
+   [ ] STAGING: create Part_345 from candidate, put its webhook URL into wired Part2
+       [965], parallel-run the golden batch OLD vs NEW, compare field-by-field.
+       TOP FOCUS: [962] Sage payment posting; neg-invoice datastore lifecycle under
+       CONCURRENT checks; stop-exit responds 32001/32002.
+   [ ] Then production deploy; keep old scenarios inactive for rollback.
+   [ ] Leak B (datastore message-bus) = separate later pass.
+   [ ] Confirm 22.0 (4110999) + its backups fully off/unscheduled.
+   [ ] Review autoPurchasingActivated (silent overage cost) with the client.
+
+--------------------------------------------------------------------------------
 2026-06-19
 --------------------------------------------------------------------------------
 
@@ -180,9 +277,20 @@ LESSON (live push validates what static QA cannot): first push failed IM007
 (mapper field `array`); Array Aggregator is builtin:BasicAggregator. Neither
 builtin:Iterator nor builtin:ArrayAggregator exist. The `gate` command now flags both.
 
+LESSON (row limit on Excel/SharePoint fetch): when fetching rows with
+microsoft-excel:listTableRows (especially the one-time Bank_Table fetch, module 313),
+DO NOT limit the number of rows returned - the fetch must return ALL rows (clear/unset
+the "Limit"/max-rows so every mapping row is cached), otherwise the in-memory lookup
+misses banks beyond the cap. My generated module 313 had a row-limit bug; the USER
+hand-fixed the LIVE scenario 4492713 to fetch all rows. Going forward, replicate the
+user's live config: no row limit on Excel listTableRows fetches.
+
 OPEN / NEXT ACTIONS
-   [x] Upload CSV fix PUSHED live to 4492713 (2026-06-19). Live == FIXED (qa-diff clean).
-       Rollback: .make/backups/4492713-20260619-144328.json, or Make version history.
+   [x] Upload CSV fix PUSHED live to 4492713 (2026-06-19). Rollback:
+       .make/backups/4492713-20260619-144328.json, or Make version history.
+   [!] USER then hand-edited LIVE 4492713 (removed the row limit on the Excel fetch,
+       module 313). So scratch/...FIXED.blueprint.json is now STALE vs live. Before any
+       further edit: RE-PULL live first (`make_cli.py pull 4492713`), then edit/gate/push.
        PENDING: monitor the next real run's logs/dlqs to confirm no 503 + accurate report.
    [ ] Rotate exposed Make API token; update .env.
    [ ] Confirm Empres bill 35505383 root cause via support files / mapping worksheet;
