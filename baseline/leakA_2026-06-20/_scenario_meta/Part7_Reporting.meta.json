@@ -1,0 +1,60 @@
+{
+  "scenario": {
+    "id": 5171262,
+    "name": "Project1_Part7_Checkflo Sage Integration_Reporting",
+    "teamId": 33002,
+    "hookId": 2355018,
+    "devices": [],
+    "deviceId": null,
+    "deviceScope": null,
+    "concept": false,
+    "description": "",
+    "folderId": 102811,
+    "slots": null,
+    "isinvalid": false,
+    "islinked": true,
+    "islocked": false,
+    "isPaused": false,
+    "usedPackages": [
+      "gateway",
+      "datastore",
+      "datastore",
+      "util",
+      "builtin",
+      "microsoft-excel",
+      "builtin",
+      "datastore",
+      "util",
+      "microsoft-email",
+      "microsoft-excel",
+      "builtin",
+      "datastore",
+      "util",
+      "microsoft-email"
+    ],
+    "lastEdit": "2026-05-29T10:40:15.541Z",
+    "scheduling": {
+      "type": "immediately",
+      "maximum_runs_per_minute": 100
+    },
+    "iswaiting": false,
+    "dlqCount": 0,
+    "allDlqCount": 0,
+    "createdByUser": {
+      "id": 2074176,
+      "name": "Chaim Pantierer",
+      "email": "cpantierer@veritashcsolutions.com"
+    },
+    "updatedByUser": {
+      "id": 2074176,
+      "name": "Chaim Pantierer",
+      "email": "cpantierer@veritashcsolutions.com"
+    },
+    "nextExec": null,
+    "created": "2026-05-24T14:14:00.423Z",
+    "chainingRole": "none",
+    "type": "scenario",
+    "isShared": false,
+    "isActive": true
+  }
+}

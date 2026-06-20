@@ -1,0 +1,67 @@
+{
+  "scenario": {
+    "id": 5171324,
+    "name": "Project1_Part6_Checkflo Sage Integration_Intacct Posting",
+    "teamId": 33002,
+    "hookId": 2355047,
+    "devices": [],
+    "deviceId": null,
+    "deviceScope": null,
+    "concept": false,
+    "description": "",
+    "folderId": 102811,
+    "slots": null,
+    "isinvalid": false,
+    "islinked": true,
+    "islocked": false,
+    "isPaused": false,
+    "usedPackages": [
+      "gateway",
+      "xml",
+      "util",
+      "datastore",
+      "builtin",
+      "http",
+      "builtin",
+      "builtin",
+      "microsoft-excel",
+      "http",
+      "builtin",
+      "builtin",
+      "http",
+      "builtin",
+      "builtin",
+      "datastore",
+      "datastore",
+      "gateway",
+      "microsoft-excel",
+      "microsoft-excel",
+      "datastore",
+      "microsoft-excel"
+    ],
+    "lastEdit": "2026-05-29T10:39:50.960Z",
+    "scheduling": {
+      "type": "immediately",
+      "maximum_runs_per_minute": 100
+    },
+    "iswaiting": false,
+    "dlqCount": 0,
+    "allDlqCount": 0,
+    "createdByUser": {
+      "id": 2074176,
+      "name": "Chaim Pantierer",
+      "email": "cpantierer@veritashcsolutions.com"
+    },
+    "updatedByUser": {
+      "id": 2074176,
+      "name": "Chaim Pantierer",
+      "email": "cpantierer@veritashcsolutions.com"
+    },
+    "nextExec": null,
+    "created": "2026-05-24T14:27:25.824Z",
+    "chainingRole": "none",
+    "type": "scenario",
+    "isShared": false,
+    "isActive": true
+  }
+}

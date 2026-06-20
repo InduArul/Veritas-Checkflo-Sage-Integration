@@ -1,0 +1,102 @@
+{
+  "Part1_MoWeSa": {
+    "type": "indefinitely",
+    "interval": 10800,
+    "restrict": [
+      {
+        "days": [
+          1,
+          3,
+          6
+        ],
+        "time": [
+          "07:30",
+          "19:30"
+        ],
+        "months": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ]
+      }
+    ],
+    "maxRunsPM": null
+  },
+  "Part1_TuThFr": {
+    "type": "indefinitely",
+    "interval": 7200,
+    "restrict": [
+      {
+        "days": [
+          2,
+          4,
+          5
+        ],
+        "time": [
+          "07:30",
+          "19:30"
+        ],
+        "months": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ]
+      }
+    ],
+    "maxRunsPM": null
+  },
+  "Part2_Main": {
+    "type": "immediately",
+    "interval": null,
+    "restrict": null,
+    "maxRunsPM": 100
+  },
+  "Part3_Vendor": {
+    "type": "immediately",
+    "interval": null,
+    "restrict": null,
+    "maxRunsPM": 100
+  },
+  "Part4_NegChecks": {
+    "type": "immediately",
+    "interval": null,
+    "restrict": null,
+    "maxRunsPM": 100
+  },
+  "Part5_Loop": {
+    "type": "immediately",
+    "interval": null,
+    "restrict": null,
+    "maxRunsPM": 100
+  },
+  "Part6_Posting": {
+    "type": "immediately",
+    "interval": null,
+    "restrict": null,
+    "maxRunsPM": 100
+  },
+  "Part7_Reporting": {
+    "type": "immediately",
+    "interval": null,
+    "restrict": null,
+    "maxRunsPM": 100
+  }
+}

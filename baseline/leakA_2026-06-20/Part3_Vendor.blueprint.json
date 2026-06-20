@@ -1,0 +1,2936 @@
+{
+  "flow": [
+    {
+      "id": 918,
+      "mapper": {},
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "hook": {
+              "data": {
+                "editable": "true"
+              },
+              "label": "Sage_Integration_Fetch Vendor Details_Part3"
+            }
+          }
+        },
+        "advanced": true,
+        "designer": {
+          "x": 0,
+          "y": 1500
+        },
+        "parameters": [
+          {
+            "name": "hook",
+            "type": "hook:gateway-webhook",
+            "label": "Webhook",
+            "required": true
+          },
+          {
+            "name": "maxResults",
+            "type": "number",
+            "label": "Maximum number of results"
+          }
+        ]
+      },
+      "parameters": {
+        "hook": 2369900,
+        "maxResults": 1
+      }
+    },
+    {
+      "id": 432,
+      "mapper": {
+        "key": "Total_value_of_checks_from_checkflo",
+        "returnWrapped": false
+      },
+      "module": "datastore:GetRecord",
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "key",
+            "type": "text",
+            "label": "Key",
+            "required": true
+          },
+          {
+            "name": "returnWrapped",
+            "type": "boolean",
+            "label": "Return Wrapped Output",
+            "required": true
+          }
+        ],
+        "restore": {
+          "parameters": {
+            "datastore": {
+              "label": "temp_var"
+            }
+          }
+        },
+        "designer": {
+          "x": 300,
+          "y": 1500,
+          "name": "Get \"Total_value_of_checks_from_checkflo\""
+        },
+        "interface": [
+          {
+            "name": "temp",
+            "type": "number",
+            "label": null,
+            "default": 0,
+            "required": false
+          }
+        ],
+        "parameters": [
+          {
+            "name": "datastore",
+            "type": "datastore",
+            "label": "Data store",
+            "required": true
+          }
+        ]
+      },
+      "parameters": {
+        "datastore": 3103
+      }
+    },
+    {
+      "id": 433,
+      "mapper": {
+        "key": "Total_value_of_checks_from_checkflo",
+        "data": {
+          "temp": "{{parseNumber(432.temp; ) + parseNumber(918.Amount; )}}"
+        },
+        "upsert": false,
+        "overwriteArrays": true
+      },
+      "module": "datastore:UpdateRecord",
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "key",
+            "type": "text",
+            "label": "Key",
+            "required": true
+          },
+          {
+            "name": "upsert",
+            "type": "boolean",
+            "label": "Insert missing record",
+            "required": true
+          },
+          {
+            "name": "overwriteArrays",
+            "type": "boolean",
+            "label": "Overwrite an existing array in the record",
+            "required": true
+          },
+          {
+            "name": "data",
+            "spec": [
+              {
+                "name": "temp",
+                "type": "number",
+                "label": null
+              }
+            ],
+            "type": "collection",
+            "label": "Record"
+          }
+        ],
+        "restore": {
+          "expect": {
+            "upsert": {
+              "mode": "chose"
+            },
+            "overwriteArrays": {
+              "mode": "chose"
+            }
+          },
+          "parameters": {
+            "datastore": {
+              "label": "temp_var"
+            }
+          }
+        },
+        "designer": {
+          "x": 600,
+          "y": 1500,
+          "name": "Update \"\"Total_value_of_checks_from_checkflo\"\""
+        },
+        "parameters": [
+          {
+            "name": "datastore",
+            "type": "datastore",
+            "label": "Data store",
+            "required": true
+          }
+        ]
+      },
+      "parameters": {
+        "datastore": 3103
+      }
+    },
+    {
+      "id": 118,
+      "mapper": {
+        "scope": "roundtrip",
+        "variables": [
+          {
+            "name": "Custom_fields_as_array",
+            "value": "{{toArray(918.Custom_fields)}}"
+          },
+          {
+            "name": "vendor_found",
+            "value": "0"
+          }
+        ]
+      },
+      "module": "util:SetVariables",
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "variables",
+            "spec": [
+              {
+                "name": "name",
+                "type": "text",
+                "label": "Variable name",
+                "required": true
+              },
+              {
+                "name": "value",
+                "type": "any",
+                "label": "Variable value"
+              }
+            ],
+            "type": "array",
+            "label": "Variables"
+          },
+          {
+            "name": "scope",
+            "type": "select",
+            "label": "Variable lifetime",
+            "required": true,
+            "validate": {
+              "enum": [
+                "roundtrip",
+                "execution"
+              ]
+            }
+          }
+        ],
+        "restore": {
+          "expect": {
+            "scope": {
+              "label": "One cycle"
+            },
+            "variables": {
+              "items": [
+                null,
+                null
+              ]
+            }
+          }
+        },
+        "designer": {
+          "x": 900,
+          "y": 1500,
+          "name": "Converting custom fields to Array - Part1"
+        },
+        "interface": [
+          {
+            "name": "Custom_fields_as_array",
+            "type": "any",
+            "label": "Custom_fields_as_array"
+          },
+          {
+            "name": "vendor_found",
+            "type": "any",
+            "label": "vendor_found"
+          }
+        ]
+      },
+      "parameters": {}
+    },
+    {
+      "id": 700,
+      "mapper": null,
+      "module": "builtin:BasicRouter",
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 708,
+              "mapper": {
+                "array": "{{118.Custom_fields_as_array}}"
+              },
+              "module": "builtin:BasicFeeder",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "mode": "edit",
+                    "name": "array",
+                    "spec": [],
+                    "type": "array",
+                    "label": "Array"
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "array": {
+                      "mode": "edit"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 1500,
+                  "y": 150
+                }
+              },
+              "parameters": {}
+            },
+            {
+              "id": 709,
+              "filter": {
+                "name": "",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{708.value}}",
+                      "o": "exist"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "key": "{{708.key}}",
+                "value": "{{708.value}}"
+              },
+              "module": "builtin:BasicAggregator",
+              "version": 1,
+              "metadata": {
+                "restore": {
+                  "extra": {
+                    "feeder": {
+                      "label": "Iterator [708]"
+                    },
+                    "target": {
+                      "label": "Custom"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 1800,
+                  "y": 150
+                }
+              },
+              "parameters": {
+                "feeder": 708
+              }
+            },
+            {
+              "id": 715,
+              "mapper": null,
+              "module": "builtin:BasicRouter",
+              "routes": [
+                {
+                  "flow": [
+                    {
+                      "id": 718,
+                      "filter": {
+                        "name": "If 1st key is not Invoice1",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{709.array[].key}}",
+                              "b": "invoice1",
+                              "o": "text:notequal"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": {
+                        "array": "{{709.array}}"
+                      },
+                      "module": "builtin:BasicFeeder",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "mode": "edit",
+                            "name": "array",
+                            "spec": [],
+                            "type": "array",
+                            "label": "Array"
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "array": {
+                              "mode": "edit"
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 2400,
+                          "y": 0
+                        }
+                      },
+                      "parameters": {}
+                    },
+                    {
+                      "id": 719,
+                      "filter": {
+                        "name": "If Key is Invoice1 slice from that index",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{718.key}}",
+                              "b": "invoice1",
+                              "o": "text:equal"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": {
+                        "__IMTINDEX__": "{{718.`__IMTINDEX__`}}"
+                      },
+                      "module": "builtin:BasicAggregator",
+                      "version": 1,
+                      "metadata": {
+                        "restore": {
+                          "extra": {
+                            "feeder": {
+                              "label": "Iterator [718]"
+                            },
+                            "target": {
+                              "label": "Custom"
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 2700,
+                          "y": 0
+                        }
+                      },
+                      "parameters": {
+                        "feeder": 718
+                      }
+                    },
+                    {
+                      "id": 714,
+                      "mapper": {
+                        "scope": "roundtrip",
+                        "variables": [
+                          {
+                            "name": "invoice_as_complexarray",
+                            "value": "{{slice(709.array; 719.array[].`__IMTINDEX__` - 1)}}"
+                          }
+                        ]
+                      },
+                      "module": "util:SetVariables",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "variables",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Variable name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "any",
+                                "label": "Variable value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Variables"
+                          },
+                          {
+                            "name": "scope",
+                            "type": "select",
+                            "label": "Variable lifetime",
+                            "required": true,
+                            "validate": {
+                              "enum": [
+                                "roundtrip",
+                                "execution"
+                              ]
+                            }
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "scope": {
+                              "label": "One cycle"
+                            },
+                            "variables": {
+                              "items": [
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3000,
+                          "y": 0
+                        },
+                        "interface": [
+                          {
+                            "name": "invoice_as_complexarray",
+                            "type": "any",
+                            "label": "invoice_as_complexarray"
+                          }
+                        ]
+                      },
+                      "parameters": {}
+                    }
+                  ]
+                },
+                {
+                  "flow": [
+                    {
+                      "id": 716,
+                      "filter": {
+                        "name": "If 1st key is Invoice1",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{709.array[].key}}",
+                              "b": "invoice1",
+                              "o": "text:equal"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": {
+                        "scope": "roundtrip",
+                        "variables": [
+                          {
+                            "name": "invoice_as_complexarray",
+                            "value": "{{709.array}}"
+                          }
+                        ]
+                      },
+                      "module": "util:SetVariables",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "variables",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Variable name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "any",
+                                "label": "Variable value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Variables"
+                          },
+                          {
+                            "name": "scope",
+                            "type": "select",
+                            "label": "Variable lifetime",
+                            "required": true,
+                            "validate": {
+                              "enum": [
+                                "roundtrip",
+                                "execution"
+                              ]
+                            }
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "scope": {
+                              "label": "One cycle"
+                            },
+                            "variables": {
+                              "items": [
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 2400,
+                          "y": 300
+                        },
+                        "interface": [
+                          {
+                            "name": "invoice_as_complexarray",
+                            "type": "any",
+                            "label": "invoice_as_complexarray"
+                          }
+                        ]
+                      },
+                      "parameters": {}
+                    }
+                  ]
+                }
+              ],
+              "version": 1,
+              "metadata": {
+                "designer": {
+                  "x": 2100,
+                  "y": 150
+                }
+              },
+              "parameters": {
+                "else": 1
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 717,
+              "mapper": {
+                "variables": [
+                  "invoice_as_complexarray"
+                ]
+              },
+              "module": "util:GetVariables",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "variables",
+                    "spec": {
+                      "name": "value",
+                      "type": "text",
+                      "label": "Variable name",
+                      "required": true
+                    },
+                    "type": "array",
+                    "label": "Variables"
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "variables": {
+                      "items": [
+                        null
+                      ]
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 1500,
+                  "y": 1800
+                },
+                "interface": [
+                  {
+                    "name": "invoice_as_complexarray",
+                    "type": "any",
+                    "label": "invoice_as_complexarray"
+                  }
+                ]
+              },
+              "parameters": {}
+            },
+            {
+              "id": 127,
+              "mapper": {
+                "name": "simple_array_of_Invoice_data",
+                "scope": "roundtrip",
+                "value": "{{map(717.invoice_as_complexarray; \"value\")}}"
+              },
+              "module": "util:SetVariable2",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "name",
+                    "type": "text",
+                    "label": "Variable name",
+                    "required": true
+                  },
+                  {
+                    "name": "scope",
+                    "type": "select",
+                    "label": "Variable lifetime",
+                    "required": true,
+                    "validate": {
+                      "enum": [
+                        "roundtrip",
+                        "execution"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "value",
+                    "type": "any",
+                    "label": "Variable value"
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "scope": {
+                      "label": "One cycle"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 1800,
+                  "y": 1800,
+                  "name": "Converting custom fields to Array - Part2"
+                },
+                "interface": [
+                  {
+                    "name": "simple_array_of_Invoice_data",
+                    "type": "any",
+                    "label": "simple_array_of_Invoice_data"
+                  }
+                ]
+              },
+              "parameters": {}
+            },
+            {
+              "id": 532,
+              "mapper": {
+                "ca": "",
+                "qs": [],
+                "url": "{{918.Sage_url}}",
+                "data": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n    <control>\n        <senderid>{{918.Sage_Sender_id}}</senderid>\n        <password><![CDATA[{{918.Sage_Sender_pass}}]]></password>\n        <controlid></controlid>\n        <uniqueid>false</uniqueid>\n        <dtdversion>3.0</dtdversion>\n        <includewhitespace>false</includewhitespace>\n    </control>\n    <operation>\n        <authentication>\n            <sessionid>{{918.Sage_Session_id}}</sessionid>\n        </authentication>\n        <content>\n            <function controlid=\"\">\n                <query>\n                    <object>APBILL</object>\n                    <select>\n                        <field>VENDORNAME</field>\n                        <field>VENDORID</field>\n                        <field>RECORDID</field>\n                    </select>\n                    <filter>\n                        <and>\n                        <like>\n                            <field>RECORDID</field>\n                            <value><![CDATA[{{918.Invoice1}}]]></value>                        \n                        </like>\n                        <equalto>\n                            <field>VENDORNAME</field>\n                            <value><![CDATA[{{918.Company}}]]></value>                                                                 \n                        </equalto>\n                        </and>\n                    </filter>  \n                </query>\n            </function>\n        </content>\n    </operation>\n</request>",
+                "gzip": true,
+                "method": "post",
+                "headers": [],
+                "timeout": "",
+                "useMtls": false,
+                "authPass": "",
+                "authUser": "",
+                "bodyType": "raw",
+                "contentType": "application/xml",
+                "serializeUrl": false,
+                "shareCookies": false,
+                "parseResponse": true,
+                "followRedirect": true,
+                "useQuerystring": false,
+                "followAllRedirects": false,
+                "rejectUnauthorized": true
+              },
+              "module": "http:ActionSendData",
+              "onerror": [
+                {
+                  "id": 848,
+                  "mapper": {
+                    "count": "3",
+                    "retry": true,
+                    "interval": "1"
+                  },
+                  "module": "builtin:Break",
+                  "version": 1,
+                  "metadata": {
+                    "expect": [
+                      {
+                        "name": "retry",
+                        "type": "boolean",
+                        "label": "Automatically complete execution",
+                        "required": true
+                      },
+                      {
+                        "name": "count",
+                        "type": "uinteger",
+                        "label": "Number of attempts",
+                        "required": true,
+                        "validate": {
+                          "max": 10000,
+                          "min": 1
+                        }
+                      },
+                      {
+                        "name": "interval",
+                        "type": "uinteger",
+                        "label": "Interval between attempts",
+                        "required": true,
+                        "validate": {
+                          "max": 44640,
+                          "min": 1
+                        }
+                      }
+                    ],
+                    "restore": {
+                      "expect": {
+                        "retry": {
+                          "mode": "chose"
+                        }
+                      }
+                    },
+                    "designer": {
+                      "x": 2400,
+                      "y": 3000
+                    }
+                  },
+                  "parameters": {}
+                }
+              ],
+              "version": 3,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "url",
+                    "type": "url",
+                    "label": "URL",
+                    "required": true
+                  },
+                  {
+                    "name": "serializeUrl",
+                    "type": "boolean",
+                    "label": "Serialize URL",
+                    "required": true
+                  },
+                  {
+                    "name": "method",
+                    "type": "select",
+                    "label": "Method",
+                    "required": true,
+                    "validate": {
+                      "enum": [
+                        "get",
+                        "head",
+                        "post",
+                        "put",
+                        "patch",
+                        "delete",
+                        "options"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "headers",
+                    "spec": [
+                      {
+                        "name": "name",
+                        "type": "text",
+                        "label": "Name",
+                        "required": true
+                      },
+                      {
+                        "name": "value",
+                        "type": "text",
+                        "label": "Value"
+                      }
+                    ],
+                    "type": "array",
+                    "label": "Headers"
+                  },
+                  {
+                    "name": "qs",
+                    "spec": [
+                      {
+                        "name": "name",
+                        "type": "text",
+                        "label": "Name",
+                        "required": true
+                      },
+                      {
+                        "name": "value",
+                        "type": "text",
+                        "label": "Value"
+                      }
+                    ],
+                    "type": "array",
+                    "label": "Query String"
+                  },
+                  {
+                    "name": "bodyType",
+                    "type": "select",
+                    "label": "Body type",
+                    "validate": {
+                      "enum": [
+                        "raw",
+                        "x_www_form_urlencoded",
+                        "multipart_form_data"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "parseResponse",
+                    "type": "boolean",
+                    "label": "Parse response",
+                    "required": true
+                  },
+                  {
+                    "name": "authUser",
+                    "type": "text",
+                    "label": "User name"
+                  },
+                  {
+                    "name": "authPass",
+                    "type": "password",
+                    "label": "Password"
+                  },
+                  {
+                    "name": "timeout",
+                    "type": "uinteger",
+                    "label": "Timeout",
+                    "validate": {
+                      "max": 300,
+                      "min": 1
+                    }
+                  },
+                  {
+                    "name": "shareCookies",
+                    "type": "boolean",
+                    "label": "Share cookies with other HTTP modules",
+                    "required": true
+                  },
+                  {
+                    "name": "ca",
+                    "type": "cert",
+                    "label": "Self-signed certificate"
+                  },
+                  {
+                    "name": "rejectUnauthorized",
+                    "type": "boolean",
+                    "label": "Reject connections that are using unverified (self-signed) certificates",
+                    "required": true
+                  },
+                  {
+                    "name": "followRedirect",
+                    "type": "boolean",
+                    "label": "Follow redirect",
+                    "required": true
+                  },
+                  {
+                    "name": "useQuerystring",
+                    "type": "boolean",
+                    "label": "Disable serialization of multiple same query string keys as arrays",
+                    "required": true
+                  },
+                  {
+                    "name": "gzip",
+                    "type": "boolean",
+                    "label": "Request compressed content",
+                    "required": true
+                  },
+                  {
+                    "name": "useMtls",
+                    "type": "boolean",
+                    "label": "Use Mutual TLS",
+                    "required": true
+                  },
+                  {
+                    "name": "contentType",
+                    "type": "select",
+                    "label": "Content type",
+                    "validate": {
+                      "enum": [
+                        "text/plain",
+                        "application/json",
+                        "application/xml",
+                        "text/xml",
+                        "text/html",
+                        "custom"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "data",
+                    "type": "buffer",
+                    "label": "Request content"
+                  },
+                  {
+                    "name": "followAllRedirects",
+                    "type": "boolean",
+                    "label": "Follow all redirect",
+                    "required": true
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "qs": {
+                      "mode": "chose"
+                    },
+                    "method": {
+                      "mode": "chose",
+                      "label": "POST"
+                    },
+                    "headers": {
+                      "mode": "chose"
+                    },
+                    "bodyType": {
+                      "label": "Raw"
+                    },
+                    "contentType": {
+                      "label": "XML (application/xml)"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 2100,
+                  "y": 1800,
+                  "name": "Fetch Vendor ID"
+                },
+                "parameters": [
+                  {
+                    "name": "handleErrors",
+                    "type": "boolean",
+                    "label": "Evaluate all states as errors (except for 2xx and 3xx )",
+                    "required": true
+                  },
+                  {
+                    "name": "useNewZLibDeCompress",
+                    "type": "hidden"
+                  }
+                ]
+              },
+              "parameters": {
+                "handleErrors": true,
+                "useNewZLibDeCompress": true
+              }
+            },
+            {
+              "id": 531,
+              "mapper": null,
+              "module": "builtin:BasicRouter",
+              "routes": [
+                {
+                  "flow": [
+                    {
+                      "id": 533,
+                      "filter": {
+                        "name": "When AP Bill Exists",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{532.data.response.operation[].result[].data[].APBILL}}",
+                              "o": "exist"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": {
+                        "scope": "roundtrip",
+                        "variables": [
+                          {
+                            "name": "vendor_id",
+                            "value": "{{532.data.response.operation[].result[].data[].APBILL[].VENDORID[]}}"
+                          },
+                          {
+                            "name": "vendor_found",
+                            "value": "1"
+                          }
+                        ]
+                      },
+                      "module": "util:SetVariables",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "variables",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Variable name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "any",
+                                "label": "Variable value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Variables"
+                          },
+                          {
+                            "name": "scope",
+                            "type": "select",
+                            "label": "Variable lifetime",
+                            "required": true,
+                            "validate": {
+                              "enum": [
+                                "roundtrip",
+                                "execution"
+                              ]
+                            }
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "scope": {
+                              "label": "One cycle"
+                            },
+                            "variables": {
+                              "items": [
+                                null,
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 2700,
+                          "y": 600
+                        },
+                        "interface": [
+                          {
+                            "name": "vendor_id",
+                            "type": "any",
+                            "label": "vendor_id"
+                          },
+                          {
+                            "name": "vendor_found",
+                            "type": "any",
+                            "label": "vendor_found"
+                          }
+                        ]
+                      },
+                      "parameters": {}
+                    }
+                  ]
+                },
+                {
+                  "flow": [
+                    {
+                      "id": 282,
+                      "filter": {
+                        "name": "if AP bill does not exist",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{532.data.response.operation[].result[].data[].APBILL}}",
+                              "o": "notexist"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": {
+                        "ca": "",
+                        "qs": [],
+                        "url": "{{918.Sage_url}}",
+                        "data": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n    <control>\n        <senderid>{{918.Sage_Sender_id}}</senderid>\n        <password><![CDATA[{{918.Sage_Sender_pass}}]]></password>\n        <controlid></controlid>\n        <uniqueid>false</uniqueid>\n        <dtdversion>3.0</dtdversion>\n        <includewhitespace>false</includewhitespace>\n    </control>\n    <operation>\n        <authentication>\n            <sessionid>{{918.Sage_Session_id}}</sessionid>\n        </authentication>\n        <content>\n            <function controlid=\"\">\n                <query>\n                    <object>APBILL</object>\n                    <select>\n                        <field>VENDORNAME</field>\n                        <field>VENDORID</field>\n                        <field>RECORDID</field>\n                    </select>\n                    <filter>\n                        <and>\n                        <like>\n                            <field>RECORDID</field>\n                            <value>%<![CDATA[{{918.Invoice1}}]]></value>                        \n                        </like>\n                        <equalto>\n                            <field>VENDORNAME</field>\n                            <value><![CDATA[{{918.Company}}]]></value>                                                                 \n                        </equalto>\n                        </and>\n                    </filter>  \n                </query>\n            </function>\n        </content>\n    </operation>\n</request>",
+                        "gzip": true,
+                        "method": "post",
+                        "headers": [],
+                        "timeout": "",
+                        "useMtls": false,
+                        "authPass": "",
+                        "authUser": "",
+                        "bodyType": "raw",
+                        "contentType": "application/xml",
+                        "serializeUrl": false,
+                        "shareCookies": false,
+                        "parseResponse": true,
+                        "followRedirect": true,
+                        "useQuerystring": false,
+                        "followAllRedirects": false,
+                        "rejectUnauthorized": true
+                      },
+                      "module": "http:ActionSendData",
+                      "onerror": [
+                        {
+                          "id": 850,
+                          "mapper": {
+                            "count": "3",
+                            "retry": true,
+                            "interval": "1"
+                          },
+                          "module": "builtin:Break",
+                          "version": 1,
+                          "metadata": {
+                            "expect": [
+                              {
+                                "name": "retry",
+                                "type": "boolean",
+                                "label": "Automatically complete execution",
+                                "required": true
+                              },
+                              {
+                                "name": "count",
+                                "type": "uinteger",
+                                "label": "Number of attempts",
+                                "required": true,
+                                "validate": {
+                                  "max": 10000,
+                                  "min": 1
+                                }
+                              },
+                              {
+                                "name": "interval",
+                                "type": "uinteger",
+                                "label": "Interval between attempts",
+                                "required": true,
+                                "validate": {
+                                  "max": 44640,
+                                  "min": 1
+                                }
+                              }
+                            ],
+                            "restore": {
+                              "expect": {
+                                "retry": {
+                                  "mode": "chose"
+                                }
+                              }
+                            },
+                            "designer": {
+                              "x": 3000,
+                              "y": 2100
+                            }
+                          },
+                          "parameters": {}
+                        }
+                      ],
+                      "version": 3,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "url",
+                            "type": "url",
+                            "label": "URL",
+                            "required": true
+                          },
+                          {
+                            "name": "serializeUrl",
+                            "type": "boolean",
+                            "label": "Serialize URL",
+                            "required": true
+                          },
+                          {
+                            "name": "method",
+                            "type": "select",
+                            "label": "Method",
+                            "required": true,
+                            "validate": {
+                              "enum": [
+                                "get",
+                                "head",
+                                "post",
+                                "put",
+                                "patch",
+                                "delete",
+                                "options"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "headers",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Headers"
+                          },
+                          {
+                            "name": "qs",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Query String"
+                          },
+                          {
+                            "name": "bodyType",
+                            "type": "select",
+                            "label": "Body type",
+                            "validate": {
+                              "enum": [
+                                "raw",
+                                "x_www_form_urlencoded",
+                                "multipart_form_data"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "parseResponse",
+                            "type": "boolean",
+                            "label": "Parse response",
+                            "required": true
+                          },
+                          {
+                            "name": "authUser",
+                            "type": "text",
+                            "label": "User name"
+                          },
+                          {
+                            "name": "authPass",
+                            "type": "password",
+                            "label": "Password"
+                          },
+                          {
+                            "name": "timeout",
+                            "type": "uinteger",
+                            "label": "Timeout",
+                            "validate": {
+                              "max": 300,
+                              "min": 1
+                            }
+                          },
+                          {
+                            "name": "shareCookies",
+                            "type": "boolean",
+                            "label": "Share cookies with other HTTP modules",
+                            "required": true
+                          },
+                          {
+                            "name": "ca",
+                            "type": "cert",
+                            "label": "Self-signed certificate"
+                          },
+                          {
+                            "name": "rejectUnauthorized",
+                            "type": "boolean",
+                            "label": "Reject connections that are using unverified (self-signed) certificates",
+                            "required": true
+                          },
+                          {
+                            "name": "followRedirect",
+                            "type": "boolean",
+                            "label": "Follow redirect",
+                            "required": true
+                          },
+                          {
+                            "name": "useQuerystring",
+                            "type": "boolean",
+                            "label": "Disable serialization of multiple same query string keys as arrays",
+                            "required": true
+                          },
+                          {
+                            "name": "gzip",
+                            "type": "boolean",
+                            "label": "Request compressed content",
+                            "required": true
+                          },
+                          {
+                            "name": "useMtls",
+                            "type": "boolean",
+                            "label": "Use Mutual TLS",
+                            "required": true
+                          },
+                          {
+                            "name": "contentType",
+                            "type": "select",
+                            "label": "Content type",
+                            "validate": {
+                              "enum": [
+                                "text/plain",
+                                "application/json",
+                                "application/xml",
+                                "text/xml",
+                                "text/html",
+                                "custom"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "data",
+                            "type": "buffer",
+                            "label": "Request content"
+                          },
+                          {
+                            "name": "followAllRedirects",
+                            "type": "boolean",
+                            "label": "Follow all redirect",
+                            "required": true
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "qs": {
+                              "mode": "chose"
+                            },
+                            "method": {
+                              "mode": "chose",
+                              "label": "POST"
+                            },
+                            "headers": {
+                              "mode": "chose"
+                            },
+                            "bodyType": {
+                              "label": "Raw"
+                            },
+                            "contentType": {
+                              "label": "XML (application/xml)"
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 2700,
+                          "y": 1500,
+                          "name": "Fetch Vendor ID"
+                        },
+                        "parameters": [
+                          {
+                            "name": "handleErrors",
+                            "type": "boolean",
+                            "label": "Evaluate all states as errors (except for 2xx and 3xx )",
+                            "required": true
+                          },
+                          {
+                            "name": "useNewZLibDeCompress",
+                            "type": "hidden"
+                          }
+                        ]
+                      },
+                      "parameters": {
+                        "handleErrors": true,
+                        "useNewZLibDeCompress": true
+                      }
+                    },
+                    {
+                      "id": 467,
+                      "mapper": null,
+                      "module": "builtin:BasicRouter",
+                      "routes": [
+                        {
+                          "flow": [
+                            {
+                              "id": 469,
+                              "filter": {
+                                "name": "If APBILL Exists",
+                                "conditions": [
+                                  [
+                                    {
+                                      "a": "{{282.data.response.operation[].result[].data[].APBILL}}",
+                                      "o": "exist"
+                                    }
+                                  ]
+                                ]
+                              },
+                              "mapper": {
+                                "array": "{{282.data.response.operation[].result[].data[].APBILL}}"
+                              },
+                              "module": "builtin:BasicFeeder",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "mode": "edit",
+                                    "name": "array",
+                                    "spec": [],
+                                    "type": "array",
+                                    "label": "Array"
+                                  }
+                                ],
+                                "restore": {
+                                  "expect": {
+                                    "array": {
+                                      "mode": "edit"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 3300,
+                                  "y": 900
+                                }
+                              },
+                              "parameters": {}
+                            },
+                            {
+                              "id": 466,
+                              "mapper": {
+                                "text": "{{469.RECORDID[]}}",
+                                "value": "{{emptystring}}",
+                                "global": false,
+                                "pattern": "^0+",
+                                "multiline": false,
+                                "sensitive": true,
+                                "singleline": true
+                              },
+                              "module": "regexp:Replace",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "pattern",
+                                    "type": "text",
+                                    "label": "Pattern",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "value",
+                                    "type": "text",
+                                    "label": "New value"
+                                  },
+                                  {
+                                    "name": "global",
+                                    "type": "boolean",
+                                    "label": "Global match",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "sensitive",
+                                    "type": "boolean",
+                                    "label": "Case sensitive",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "multiline",
+                                    "type": "boolean",
+                                    "label": "Multiline",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "singleline",
+                                    "type": "boolean",
+                                    "label": "Singleline",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "text",
+                                    "type": "text",
+                                    "label": "Text"
+                                  }
+                                ],
+                                "restore": {
+                                  "expect": {
+                                    "global": {
+                                      "mode": "chose"
+                                    },
+                                    "multiline": {
+                                      "mode": "chose"
+                                    },
+                                    "sensitive": {
+                                      "mode": "chose"
+                                    },
+                                    "singleline": {
+                                      "mode": "chose"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 3600,
+                                  "y": 900
+                                }
+                              },
+                              "parameters": {}
+                            },
+                            {
+                              "id": 528,
+                              "mapper": {
+                                "text": "{{918.Invoice1}}",
+                                "value": "{{emptystring}}",
+                                "global": false,
+                                "pattern": "^0+",
+                                "multiline": false,
+                                "sensitive": true,
+                                "singleline": true
+                              },
+                              "module": "regexp:Replace",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "pattern",
+                                    "type": "text",
+                                    "label": "Pattern",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "value",
+                                    "type": "text",
+                                    "label": "New value"
+                                  },
+                                  {
+                                    "name": "global",
+                                    "type": "boolean",
+                                    "label": "Global match",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "sensitive",
+                                    "type": "boolean",
+                                    "label": "Case sensitive",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "multiline",
+                                    "type": "boolean",
+                                    "label": "Multiline",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "singleline",
+                                    "type": "boolean",
+                                    "label": "Singleline",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "text",
+                                    "type": "text",
+                                    "label": "Text"
+                                  }
+                                ],
+                                "restore": {
+                                  "expect": {
+                                    "global": {
+                                      "mode": "chose"
+                                    },
+                                    "multiline": {
+                                      "mode": "chose"
+                                    },
+                                    "sensitive": {
+                                      "mode": "chose"
+                                    },
+                                    "singleline": {
+                                      "mode": "chose"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 3900,
+                                  "y": 900
+                                }
+                              },
+                              "parameters": {}
+                            },
+                            {
+                              "id": 470,
+                              "mapper": {
+                                "value": "{{if(528.text = 466.text; 1; 0)}}"
+                              },
+                              "module": "util:ComposeTransformer",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "value",
+                                    "type": "text",
+                                    "label": "Text"
+                                  }
+                                ],
+                                "restore": {},
+                                "designer": {
+                                  "x": 4200,
+                                  "y": 900
+                                }
+                              },
+                              "parameters": {}
+                            },
+                            {
+                              "id": 534,
+                              "filter": {
+                                "name": "",
+                                "conditions": [
+                                  [
+                                    {
+                                      "a": "{{470.value}}",
+                                      "b": "1",
+                                      "o": "text:equal"
+                                    }
+                                  ]
+                                ]
+                              },
+                              "mapper": {
+                                "scope": "roundtrip",
+                                "variables": [
+                                  {
+                                    "name": "vendor_id",
+                                    "value": "{{469.VENDORID[]}}"
+                                  },
+                                  {
+                                    "name": "vendor_found",
+                                    "value": "1"
+                                  }
+                                ]
+                              },
+                              "module": "util:SetVariables",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "variables",
+                                    "spec": [
+                                      {
+                                        "name": "name",
+                                        "type": "text",
+                                        "label": "Variable name",
+                                        "required": true
+                                      },
+                                      {
+                                        "name": "value",
+                                        "type": "any",
+                                        "label": "Variable value"
+                                      }
+                                    ],
+                                    "type": "array",
+                                    "label": "Variables"
+                                  },
+                                  {
+                                    "name": "scope",
+                                    "type": "select",
+                                    "label": "Variable lifetime",
+                                    "required": true,
+                                    "validate": {
+                                      "enum": [
+                                        "roundtrip",
+                                        "execution"
+                                      ]
+                                    }
+                                  }
+                                ],
+                                "restore": {
+                                  "expect": {
+                                    "scope": {
+                                      "label": "One cycle"
+                                    },
+                                    "variables": {
+                                      "items": [
+                                        null,
+                                        null
+                                      ]
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 4500,
+                                  "y": 900
+                                },
+                                "interface": [
+                                  {
+                                    "name": "vendor_id",
+                                    "type": "any",
+                                    "label": "vendor_id"
+                                  },
+                                  {
+                                    "name": "vendor_found",
+                                    "type": "any",
+                                    "label": "vendor_found"
+                                  }
+                                ]
+                              },
+                              "parameters": {}
+                            }
+                          ]
+                        },
+                        {
+                          "flow": [
+                            {
+                              "id": 813,
+                              "filter": {
+                                "name": "When APBill does not exist",
+                                "conditions": [
+                                  [
+                                    {
+                                      "a": "{{282.data.response.operation[].result[].data[].APBILL}}",
+                                      "o": "notexist"
+                                    }
+                                  ]
+                                ]
+                              },
+                              "mapper": {
+                                "ca": "",
+                                "qs": [],
+                                "url": "{{918.Sage_url}}",
+                                "data": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n    <control>\n        <senderid>{{918.Sage_Sender_id}}</senderid>\n        <password><![CDATA[{{918.Sage_Sender_pass}}]]></password>\n        <controlid></controlid>\n        <uniqueid>false</uniqueid>\n        <dtdversion>3.0</dtdversion>\n        <includewhitespace>false</includewhitespace>\n    </control>\n    <operation>\n        <authentication>\n            <sessionid>{{918.Sage_Session_id}}</sessionid>\n        </authentication>\n        <content>\n            <function controlid=\"\">\n                <query>\n                    <object>APBILL</object>\n                    <select>\n                        <field>VENDORNAME</field>\n                        <field>VENDORID</field>\n                        <field>RECORDID</field>\n                    </select>\n                    <filter>\n                        <and>\n                        <equalto>\n                            <field>TOTALENTERED</field>\n                            <value><![CDATA[{{918.Checkfields_InvAmt1}}]]></value>                        \n                        </equalto>\n                        <equalto>\n                            <field>WHENCREATED</field>\n                            <value><![CDATA[{{918.Checkfields_date1}}]]></value>                        \n                        </equalto>\n                        <equalto>\n                            <field>VENDORNAME</field>\n                            <value><![CDATA[{{918.Company}}]]></value>                                                                 \n                        </equalto>\n                        </and>\n                    </filter>  \n                </query>\n            </function>\n        </content>\n    </operation>\n</request>",
+                                "gzip": true,
+                                "method": "post",
+                                "headers": [],
+                                "timeout": "",
+                                "useMtls": false,
+                                "authPass": "",
+                                "authUser": "",
+                                "bodyType": "raw",
+                                "contentType": "application/xml",
+                                "serializeUrl": false,
+                                "shareCookies": false,
+                                "parseResponse": true,
+                                "followRedirect": true,
+                                "useQuerystring": false,
+                                "followAllRedirects": false,
+                                "rejectUnauthorized": true
+                              },
+                              "module": "http:ActionSendData",
+                              "onerror": [
+                                {
+                                  "id": 849,
+                                  "mapper": {
+                                    "count": "3",
+                                    "retry": true,
+                                    "interval": "1"
+                                  },
+                                  "module": "builtin:Break",
+                                  "version": 1,
+                                  "metadata": {
+                                    "expect": [
+                                      {
+                                        "name": "retry",
+                                        "type": "boolean",
+                                        "label": "Automatically complete execution",
+                                        "required": true
+                                      },
+                                      {
+                                        "name": "count",
+                                        "type": "uinteger",
+                                        "label": "Number of attempts",
+                                        "required": true,
+                                        "validate": {
+                                          "max": 10000,
+                                          "min": 1
+                                        }
+                                      },
+                                      {
+                                        "name": "interval",
+                                        "type": "uinteger",
+                                        "label": "Interval between attempts",
+                                        "required": true,
+                                        "validate": {
+                                          "max": 44640,
+                                          "min": 1
+                                        }
+                                      }
+                                    ],
+                                    "restore": {
+                                      "expect": {
+                                        "retry": {
+                                          "mode": "chose"
+                                        }
+                                      }
+                                    },
+                                    "designer": {
+                                      "x": 3600,
+                                      "y": 1800
+                                    }
+                                  },
+                                  "parameters": {}
+                                }
+                              ],
+                              "version": 3,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "url",
+                                    "type": "url",
+                                    "label": "URL",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "serializeUrl",
+                                    "type": "boolean",
+                                    "label": "Serialize URL",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "method",
+                                    "type": "select",
+                                    "label": "Method",
+                                    "required": true,
+                                    "validate": {
+                                      "enum": [
+                                        "get",
+                                        "head",
+                                        "post",
+                                        "put",
+                                        "patch",
+                                        "delete",
+                                        "options"
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "name": "headers",
+                                    "spec": [
+                                      {
+                                        "name": "name",
+                                        "type": "text",
+                                        "label": "Name",
+                                        "required": true
+                                      },
+                                      {
+                                        "name": "value",
+                                        "type": "text",
+                                        "label": "Value"
+                                      }
+                                    ],
+                                    "type": "array",
+                                    "label": "Headers"
+                                  },
+                                  {
+                                    "name": "qs",
+                                    "spec": [
+                                      {
+                                        "name": "name",
+                                        "type": "text",
+                                        "label": "Name",
+                                        "required": true
+                                      },
+                                      {
+                                        "name": "value",
+                                        "type": "text",
+                                        "label": "Value"
+                                      }
+                                    ],
+                                    "type": "array",
+                                    "label": "Query String"
+                                  },
+                                  {
+                                    "name": "bodyType",
+                                    "type": "select",
+                                    "label": "Body type",
+                                    "validate": {
+                                      "enum": [
+                                        "raw",
+                                        "x_www_form_urlencoded",
+                                        "multipart_form_data"
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "name": "parseResponse",
+                                    "type": "boolean",
+                                    "label": "Parse response",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "authUser",
+                                    "type": "text",
+                                    "label": "User name"
+                                  },
+                                  {
+                                    "name": "authPass",
+                                    "type": "password",
+                                    "label": "Password"
+                                  },
+                                  {
+                                    "name": "timeout",
+                                    "type": "uinteger",
+                                    "label": "Timeout",
+                                    "validate": {
+                                      "max": 300,
+                                      "min": 1
+                                    }
+                                  },
+                                  {
+                                    "name": "shareCookies",
+                                    "type": "boolean",
+                                    "label": "Share cookies with other HTTP modules",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "ca",
+                                    "type": "cert",
+                                    "label": "Self-signed certificate"
+                                  },
+                                  {
+                                    "name": "rejectUnauthorized",
+                                    "type": "boolean",
+                                    "label": "Reject connections that are using unverified (self-signed) certificates",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "followRedirect",
+                                    "type": "boolean",
+                                    "label": "Follow redirect",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "useQuerystring",
+                                    "type": "boolean",
+                                    "label": "Disable serialization of multiple same query string keys as arrays",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "gzip",
+                                    "type": "boolean",
+                                    "label": "Request compressed content",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "useMtls",
+                                    "type": "boolean",
+                                    "label": "Use Mutual TLS",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "contentType",
+                                    "type": "select",
+                                    "label": "Content type",
+                                    "validate": {
+                                      "enum": [
+                                        "text/plain",
+                                        "application/json",
+                                        "application/xml",
+                                        "text/xml",
+                                        "text/html",
+                                        "custom"
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "name": "data",
+                                    "type": "buffer",
+                                    "label": "Request content"
+                                  },
+                                  {
+                                    "name": "followAllRedirects",
+                                    "type": "boolean",
+                                    "label": "Follow all redirect",
+                                    "required": true
+                                  }
+                                ],
+                                "restore": {
+                                  "expect": {
+                                    "qs": {
+                                      "mode": "chose"
+                                    },
+                                    "method": {
+                                      "mode": "chose",
+                                      "label": "POST"
+                                    },
+                                    "headers": {
+                                      "mode": "chose"
+                                    },
+                                    "bodyType": {
+                                      "label": "Raw"
+                                    },
+                                    "contentType": {
+                                      "label": "XML (application/xml)"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 3300,
+                                  "y": 1500,
+                                  "name": "Fetch Vendor ID"
+                                },
+                                "parameters": [
+                                  {
+                                    "name": "handleErrors",
+                                    "type": "boolean",
+                                    "label": "Evaluate all states as errors (except for 2xx and 3xx )",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "useNewZLibDeCompress",
+                                    "type": "hidden"
+                                  }
+                                ]
+                              },
+                              "parameters": {
+                                "handleErrors": true,
+                                "useNewZLibDeCompress": true
+                              }
+                            },
+                            {
+                              "id": 814,
+                              "mapper": null,
+                              "module": "builtin:BasicRouter",
+                              "routes": [
+                                {
+                                  "flow": [
+                                    {
+                                      "id": 468,
+                                      "filter": {
+                                        "name": "",
+                                        "conditions": [
+                                          [
+                                            {
+                                              "a": "{{813.data.response.operation[].result[].data[].APBILL}}",
+                                              "o": "notexist"
+                                            }
+                                          ]
+                                        ]
+                                      },
+                                      "mapper": {
+                                        "site": "veritashcsolutions.sharepoint.com,63c7d06b-148b-4189-811c-5929df4c94ae,f64c3437-7ff8-45ba-ab34-03be0203669f",
+                                        "drive": "b!a9DHY4sUiUGBHFkp30yUrjc0TPb4f7pFqzQDvgIDZp-hLGrLFo5STILpD6_0hItb",
+                                        "table": "Table1",
+                                        "select": "map",
+                                        "values": [
+                                          "Batch: \"{{918.Batch_id}}\" Check no: \"{{918.Check_no}}\" Invoice no: \"{{127.simple_array_of_Invoice_data[]}}\"  error fetching vendor ID \"{{282.data.response.errormessage[].error[].description2[]}}\" Vendor name: {{918.Company}}"
+                                        ],
+                                        "selectB": "site",
+                                        "workbookId": "{{918.log_workbook_id}}"
+                                      },
+                                      "module": "microsoft-excel:addATableRow",
+                                      "version": 2,
+                                      "metadata": {
+                                        "expect": [
+                                          {
+                                            "name": "select",
+                                            "type": "select",
+                                            "label": "Select a method",
+                                            "required": true,
+                                            "validate": {
+                                              "enum": [
+                                                "map",
+                                                "list"
+                                              ]
+                                            }
+                                          },
+                                          {
+                                            "name": "selectB",
+                                            "type": "select",
+                                            "label": "Choose your OneDrive location",
+                                            "required": true,
+                                            "validate": {
+                                              "enum": [
+                                                "my",
+                                                "site",
+                                                "group"
+                                              ]
+                                            }
+                                          },
+                                          {
+                                            "name": "workbookId",
+                                            "type": "text",
+                                            "label": "Workbook ID",
+                                            "required": true
+                                          },
+                                          {
+                                            "name": "table",
+                                            "type": "text",
+                                            "label": "Table",
+                                            "required": true
+                                          },
+                                          {
+                                            "name": "values",
+                                            "spec": {
+                                              "name": "value",
+                                              "type": "text",
+                                              "required": true
+                                            },
+                                            "type": "array",
+                                            "label": "Values",
+                                            "required": true
+                                          },
+                                          {
+                                            "name": "index",
+                                            "type": "number",
+                                            "label": "Row ID"
+                                          },
+                                          {
+                                            "name": "site",
+                                            "type": "text",
+                                            "label": "Site ID",
+                                            "required": true
+                                          },
+                                          {
+                                            "name": "drive",
+                                            "type": "text",
+                                            "label": "Drive ID",
+                                            "required": true
+                                          }
+                                        ],
+                                        "restore": {
+                                          "expect": {
+                                            "select": {
+                                              "label": "Enter an ID manually"
+                                            },
+                                            "values": {
+                                              "mode": "chose",
+                                              "items": [
+                                                null
+                                              ]
+                                            },
+                                            "selectB": {
+                                              "label": "Site's Drive"
+                                            }
+                                          },
+                                          "parameters": {
+                                            "__IMTCONN__": {
+                                              "data": {
+                                                "scoped": "true",
+                                                "connection": "azure"
+                                              },
+                                              "label": "Veritas_Sharepoint_Connection (Veritas Reporting)"
+                                            }
+                                          }
+                                        },
+                                        "designer": {
+                                          "x": 3900,
+                                          "y": 1200,
+                                          "name": "Update Log file"
+                                        },
+                                        "parameters": [
+                                          {
+                                            "name": "__IMTCONN__",
+                                            "type": "account:azure",
+                                            "label": "Connection",
+                                            "required": true
+                                          }
+                                        ]
+                                      },
+                                      "parameters": {
+                                        "__IMTCONN__": 450334
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "flow": [
+                                    {
+                                      "id": 815,
+                                      "filter": {
+                                        "name": "APBill exists",
+                                        "conditions": [
+                                          [
+                                            {
+                                              "a": "{{813.data.response.operation[].result[].data[].APBILL}}",
+                                              "o": "exist"
+                                            }
+                                          ]
+                                        ]
+                                      },
+                                      "mapper": {
+                                        "scope": "roundtrip",
+                                        "variables": [
+                                          {
+                                            "name": "vendor_id",
+                                            "value": "{{813.data.response.operation[].result[].data[].APBILL[].VENDORID[]}}"
+                                          },
+                                          {
+                                            "name": "vendor_found",
+                                            "value": "1"
+                                          }
+                                        ]
+                                      },
+                                      "module": "util:SetVariables",
+                                      "version": 1,
+                                      "metadata": {
+                                        "expect": [
+                                          {
+                                            "name": "variables",
+                                            "spec": [
+                                              {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Variable name",
+                                                "required": true
+                                              },
+                                              {
+                                                "name": "value",
+                                                "type": "any",
+                                                "label": "Variable value"
+                                              }
+                                            ],
+                                            "type": "array",
+                                            "label": "Variables"
+                                          },
+                                          {
+                                            "name": "scope",
+                                            "type": "select",
+                                            "label": "Variable lifetime",
+                                            "required": true,
+                                            "validate": {
+                                              "enum": [
+                                                "roundtrip",
+                                                "execution"
+                                              ]
+                                            }
+                                          }
+                                        ],
+                                        "restore": {
+                                          "expect": {
+                                            "scope": {
+                                              "label": "One cycle"
+                                            },
+                                            "variables": {
+                                              "items": [
+                                                null,
+                                                null
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "designer": {
+                                          "x": 3900,
+                                          "y": 1500
+                                        },
+                                        "interface": [
+                                          {
+                                            "name": "vendor_id",
+                                            "type": "any",
+                                            "label": "vendor_id"
+                                          },
+                                          {
+                                            "name": "vendor_found",
+                                            "type": "any",
+                                            "label": "vendor_found"
+                                          }
+                                        ]
+                                      },
+                                      "parameters": {}
+                                    }
+                                  ]
+                                }
+                              ],
+                              "version": 1,
+                              "metadata": {
+                                "designer": {
+                                  "x": 3600,
+                                  "y": 1350
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "version": 1,
+                      "metadata": {
+                        "designer": {
+                          "x": 3000,
+                          "y": 1350
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "flow": [
+                    {
+                      "id": 535,
+                      "mapper": {
+                        "variables": [
+                          "vendor_id",
+                          "vendor_found"
+                        ]
+                      },
+                      "module": "util:GetVariables",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "variables",
+                            "spec": {
+                              "name": "value",
+                              "type": "text",
+                              "label": "Variable name",
+                              "required": true
+                            },
+                            "type": "array",
+                            "label": "Variables"
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "variables": {
+                              "items": [
+                                null,
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 2700,
+                          "y": 2550
+                        },
+                        "interface": [
+                          {
+                            "name": "vendor_id",
+                            "type": "any",
+                            "label": "vendor_id"
+                          },
+                          {
+                            "name": "vendor_found",
+                            "type": "any",
+                            "label": "vendor_found"
+                          }
+                        ]
+                      },
+                      "parameters": {}
+                    },
+                    {
+                      "id": 970,
+                      "mapper": null,
+                      "module": "builtin:BasicRouter",
+                      "routes": [
+                        {
+                          "flow": [
+                            {
+                              "id": 436,
+                              "filter": {
+                                "name": "Only when vendor found",
+                                "conditions": [
+                                  [
+                                    {
+                                      "a": "{{535.vendor_found}}",
+                                      "b": "1",
+                                      "o": "text:equal"
+                                    }
+                                  ]
+                                ]
+                              },
+                              "mapper": null,
+                              "module": "builtin:BasicRouter",
+                              "routes": [
+                                {
+                                  "flow": [
+                                    {
+                                      "id": 435,
+                                      "filter": {
+                                        "name": "When error fetching Vendor ID",
+                                        "conditions": [
+                                          [
+                                            {
+                                              "a": "{{535.vendor_id}}",
+                                              "b": "{{emptystring}}",
+                                              "o": "text:equal"
+                                            }
+                                          ]
+                                        ]
+                                      },
+                                      "mapper": {
+                                        "site": "veritashcsolutions.sharepoint.com,63c7d06b-148b-4189-811c-5929df4c94ae,f64c3437-7ff8-45ba-ab34-03be0203669f",
+                                        "drive": "b!a9DHY4sUiUGBHFkp30yUrjc0TPb4f7pFqzQDvgIDZp-hLGrLFo5STILpD6_0hItb",
+                                        "table": "Table1",
+                                        "select": "map",
+                                        "values": [
+                                          "Batch: \"{{918.Batch_id}}\" Check no: \"{{918.Check_no}}\" Invoice no: \"{{127.simple_array_of_Invoice_data[]}}\"  Vendor name: {{918.Company}} Unable to find Vendor ID for this company"
+                                        ],
+                                        "selectB": "site",
+                                        "workbookId": "{{918.log_workbook_id}}"
+                                      },
+                                      "module": "microsoft-excel:addATableRow",
+                                      "version": 2,
+                                      "metadata": {
+                                        "expect": [
+                                          {
+                                            "name": "select",
+                                            "type": "select",
+                                            "label": "Select a method",
+                                            "required": true,
+                                            "validate": {
+                                              "enum": [
+                                                "map",
+                                                "list"
+                                              ]
+                                            }
+                                          },
+                                          {
+                                            "name": "selectB",
+                                            "type": "select",
+                                            "label": "Choose your OneDrive location",
+                                            "required": true,
+                                            "validate": {
+                                              "enum": [
+                                                "my",
+                                                "site",
+                                                "group"
+                                              ]
+                                            }
+                                          },
+                                          {
+                                            "name": "workbookId",
+                                            "type": "text",
+                                            "label": "Workbook ID",
+                                            "required": true
+                                          },
+                                          {
+                                            "name": "table",
+                                            "type": "text",
+                                            "label": "Table",
+                                            "required": true
+                                          },
+                                          {
+                                            "name": "values",
+                                            "spec": {
+                                              "name": "value",
+                                              "type": "text",
+                                              "required": true
+                                            },
+                                            "type": "array",
+                                            "label": "Values",
+                                            "required": true
+                                          },
+                                          {
+                                            "name": "index",
+                                            "type": "number",
+                                            "label": "Row ID"
+                                          },
+                                          {
+                                            "name": "site",
+                                            "type": "text",
+                                            "label": "Site ID",
+                                            "required": true
+                                          },
+                                          {
+                                            "name": "drive",
+                                            "type": "text",
+                                            "label": "Drive ID",
+                                            "required": true
+                                          }
+                                        ],
+                                        "restore": {
+                                          "expect": {
+                                            "select": {
+                                              "label": "Enter an ID manually"
+                                            },
+                                            "values": {
+                                              "mode": "chose",
+                                              "items": [
+                                                null
+                                              ]
+                                            },
+                                            "selectB": {
+                                              "label": "Site's Drive"
+                                            }
+                                          },
+                                          "parameters": {
+                                            "__IMTCONN__": {
+                                              "data": {
+                                                "scoped": "true",
+                                                "connection": "azure"
+                                              },
+                                              "label": "Veritas_Sharepoint_Connection (Veritas Reporting)"
+                                            }
+                                          }
+                                        },
+                                        "designer": {
+                                          "x": 3600,
+                                          "y": 2400,
+                                          "name": "Update Log file"
+                                        },
+                                        "parameters": [
+                                          {
+                                            "name": "__IMTCONN__",
+                                            "type": "account:azure",
+                                            "label": "Connection",
+                                            "required": true
+                                          }
+                                        ]
+                                      },
+                                      "parameters": {
+                                        "__IMTCONN__": 450334
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "flow": [
+                                    {
+                                      "id": 645,
+                                      "mapper": {},
+                                      "module": "datastore:DeleteAllRecords",
+                                      "version": 1,
+                                      "metadata": {
+                                        "restore": {
+                                          "parameters": {
+                                            "datastore": {
+                                              "label": "Negative_Bill"
+                                            }
+                                          }
+                                        },
+                                        "designer": {
+                                          "x": 3600,
+                                          "y": 2700
+                                        },
+                                        "parameters": [
+                                          {
+                                            "name": "datastore",
+                                            "type": "datastore",
+                                            "label": "Data store",
+                                            "required": true
+                                          },
+                                          {
+                                            "name": "hardDelete",
+                                            "type": "boolean",
+                                            "label": "Always delete permanently",
+                                            "required": true
+                                          }
+                                        ]
+                                      },
+                                      "parameters": {
+                                        "datastore": 4264,
+                                        "hardDelete": false
+                                      }
+                                    },
+                                    {
+                                      "id": 824,
+                                      "mapper": {
+                                        "scope": "roundtrip",
+                                        "variables": [
+                                          {
+                                            "name": "stop_check_processing",
+                                            "value": "0"
+                                          },
+                                          {
+                                            "name": "Total_check_amount",
+                                            "value": "{{formatNumber(parseNumber(918.Amount; ); 2; \".\"; \",\")}}"
+                                          },
+                                          {
+                                            "name": "accum_invoice_amount",
+                                            "value": "0"
+                                          }
+                                        ]
+                                      },
+                                      "module": "util:SetVariables",
+                                      "version": 1,
+                                      "metadata": {
+                                        "expect": [
+                                          {
+                                            "name": "variables",
+                                            "spec": [
+                                              {
+                                                "name": "name",
+                                                "type": "text",
+                                                "label": "Variable name",
+                                                "required": true
+                                              },
+                                              {
+                                                "name": "value",
+                                                "type": "any",
+                                                "label": "Variable value"
+                                              }
+                                            ],
+                                            "type": "array",
+                                            "label": "Variables"
+                                          },
+                                          {
+                                            "name": "scope",
+                                            "type": "select",
+                                            "label": "Variable lifetime",
+                                            "required": true,
+                                            "validate": {
+                                              "enum": [
+                                                "roundtrip",
+                                                "execution"
+                                              ]
+                                            }
+                                          }
+                                        ],
+                                        "restore": {
+                                          "expect": {
+                                            "scope": {
+                                              "label": "One cycle"
+                                            },
+                                            "variables": {
+                                              "items": [
+                                                null,
+                                                null,
+                                                null
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "designer": {
+                                          "x": 3900,
+                                          "y": 2700
+                                        },
+                                        "interface": [
+                                          {
+                                            "name": "stop_check_processing",
+                                            "type": "any",
+                                            "label": "stop_check_processing"
+                                          },
+                                          {
+                                            "name": "Total_check_amount",
+                                            "type": "any",
+                                            "label": "Total_check_amount"
+                                          },
+                                          {
+                                            "name": "accum_invoice_amount",
+                                            "type": "any",
+                                            "label": "accum_invoice_amount"
+                                          }
+                                        ]
+                                      },
+                                      "parameters": {}
+                                    },
+                                    {
+                                      "id": 925,
+                                      "filter": null,
+                                      "mapper": {
+                                        "object": "{{127.simple_array_of_Invoice_data}}"
+                                      },
+                                      "module": "json:TransformToJSON",
+                                      "version": 1,
+                                      "metadata": {
+                                        "expect": [
+                                          {
+                                            "name": "object",
+                                            "type": "any",
+                                            "label": "Object"
+                                          }
+                                        ],
+                                        "restore": {
+                                          "parameters": {
+                                            "space": {
+                                              "label": "Empty"
+                                            }
+                                          }
+                                        },
+                                        "designer": {
+                                          "x": 4200,
+                                          "y": 2700
+                                        },
+                                        "parameters": [
+                                          {
+                                            "name": "space",
+                                            "type": "select",
+                                            "label": "Indentation",
+                                            "validate": {
+                                              "enum": [
+                                                "tab",
+                                                "2",
+                                                "4"
+                                              ]
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      "parameters": {
+                                        "space": ""
+                                      }
+                                    },
+                                    {
+                                      "id": 967,
+                                      "mapper": {
+                                        "body": "{\n     \"status\": \"OK\",\n     \"Simple_array_of_json\":{{925.json}},\n     \"Vendor_id\":\"{{535.vendor_id}}\",\n     \"Total_check_amount\":\"{{824.Total_check_amount}}\",\n     \"stop_check_processing\":\"{{824.stop_check_processing}}\",\n     \"accum_invoice_amout\":\"{{824.accum_invoice_amount}}\"\n}",
+                                        "status": "200",
+                                        "headers": [
+                                          {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                          }
+                                        ]
+                                      },
+                                      "module": "gateway:WebhookRespond",
+                                      "version": 1,
+                                      "metadata": {
+                                        "expect": [
+                                          {
+                                            "name": "status",
+                                            "type": "uinteger",
+                                            "label": "Status",
+                                            "required": true,
+                                            "validate": {
+                                              "min": 100
+                                            }
+                                          },
+                                          {
+                                            "name": "body",
+                                            "type": "any",
+                                            "label": "Body"
+                                          },
+                                          {
+                                            "name": "headers",
+                                            "spec": [
+                                              {
+                                                "name": "key",
+                                                "type": "text",
+                                                "label": "Key",
+                                                "required": true,
+                                                "validate": {
+                                                  "max": 256
+                                                }
+                                              },
+                                              {
+                                                "name": "value",
+                                                "type": "text",
+                                                "label": "Value",
+                                                "required": true,
+                                                "validate": {
+                                                  "max": 4096
+                                                }
+                                              }
+                                            ],
+                                            "type": "array",
+                                            "label": "Custom headers",
+                                            "validate": {
+                                              "maxItems": 16
+                                            }
+                                          }
+                                        ],
+                                        "restore": {
+                                          "expect": {
+                                            "headers": {
+                                              "mode": "chose",
+                                              "items": [
+                                                null
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "advanced": true,
+                                        "designer": {
+                                          "x": 4500,
+                                          "y": 2700
+                                        }
+                                      },
+                                      "parameters": {}
+                                    }
+                                  ]
+                                }
+                              ],
+                              "version": 1,
+                              "metadata": {
+                                "designer": {
+                                  "x": 3300,
+                                  "y": 2550
+                                }
+                              },
+                              "parameters": {
+                                "else": 0
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "flow": [
+                            {
+                              "id": 971,
+                              "mapper": {
+                                "body": "{\n     \"status\": \"OK\",\n     \"Simple_array_of_json\":\"\",\n     \"Vendor_id\":\"\",\n     \"Total_check_amount\":\"\",\n     \"stop_check_processing\":\"1\",\n     \"accum_invoice_amout\":\"\"\n}",
+                                "status": "200",
+                                "headers": [
+                                  {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                  }
+                                ]
+                              },
+                              "module": "gateway:WebhookRespond",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "status",
+                                    "type": "uinteger",
+                                    "label": "Status",
+                                    "required": true,
+                                    "validate": {
+                                      "min": 100
+                                    }
+                                  },
+                                  {
+                                    "name": "body",
+                                    "type": "any",
+                                    "label": "Body"
+                                  },
+                                  {
+                                    "name": "headers",
+                                    "spec": [
+                                      {
+                                        "name": "key",
+                                        "type": "text",
+                                        "label": "Key",
+                                        "required": true,
+                                        "validate": {
+                                          "max": 256
+                                        }
+                                      },
+                                      {
+                                        "name": "value",
+                                        "type": "text",
+                                        "label": "Value",
+                                        "required": true,
+                                        "validate": {
+                                          "max": 4096
+                                        }
+                                      }
+                                    ],
+                                    "type": "array",
+                                    "label": "Custom headers",
+                                    "validate": {
+                                      "maxItems": 16
+                                    }
+                                  }
+                                ],
+                                "restore": {
+                                  "expect": {
+                                    "headers": {
+                                      "mode": "chose",
+                                      "items": [
+                                        null
+                                      ]
+                                    }
+                                  }
+                                },
+                                "advanced": true,
+                                "designer": {
+                                  "x": 3097,
+                                  "y": 2888
+                                }
+                              },
+                              "parameters": {}
+                            }
+                          ]
+                        }
+                      ],
+                      "version": 1,
+                      "metadata": {
+                        "designer": {
+                          "x": 3000,
+                          "y": 2550
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "version": 1,
+              "metadata": {
+                "designer": {
+                  "x": 2400,
+                  "y": 1650
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 1500
+        }
+      }
+    }
+  ],
+  "name": "Project1_Part3_Checkflo Sage Integration_Fetch Vendor Details",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "designer": {
+      "orphans": []
+    },
+    "scenario": {
+      "dlq": true,
+      "slots": null,
+      "dataloss": false,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "roundtrips": 1,
+      "sequential": false,
+      "confidential": false,
+      "freshVariables": false,
+      "autoCommitTriggerLast": true
+    }
+  }
+}
