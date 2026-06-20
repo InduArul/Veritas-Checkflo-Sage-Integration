@@ -6,6 +6,16 @@ Each entry corresponds to a git commit.
 ## [Unreleased]
 
 ### 2026-06-20
+- **Leak A refactor — Option B build (`leakA_refactor/`).** Merges the per-check Vendor→
+  NegChecks→Loop chain (Part3+4+5) into a single `Part_345` sub-scenario and wires Part2 to
+  call it once instead of three times — removing 2 webhook trigger/respond pairs + 2 HTTP hops
+  (inside the chain) and `923`/`929` HTTP + `355` datastore (from Part2): ~30–44K ops/cycle.
+  Auditable composers (`compose_p345.py`, `wire_part2.py`) deterministically build the two
+  candidate blueprints from the frozen baseline. Static-verified end-to-end: trigger union,
+  glue carried (`974/975/355`), aggregator-collapse so Part5 runs once/check, union final-
+  respond on all 4 paths, Part2 wiring with 0 unexpected parity diffs, and a satisfied
+  read/provide integration contract. Internal data-stores kept as-is (Leak B deferred).
+  Pending Staging parallel-run before deploy. See `leakA_refactor/BUILD.md`.
 - **Leak A target design (`docs/LeakA_Target_Design.md`).** Inter-scenario contract
   extracted from baseline blueprints + golden bundles; proves all per-check cross-scenario
   state (check fields, Sage session, creds, accum/stop flags) can move in-bundle. Two
