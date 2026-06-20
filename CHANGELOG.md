@@ -6,6 +6,11 @@ Each entry corresponds to a git commit.
 ## [Unreleased]
 
 ### 2026-06-20
+- **Leak A target design (`docs/LeakA_Target_Design.md`).** Inter-scenario contract
+  extracted from baseline blueprints + golden bundles; proves all per-check cross-scenario
+  state (check fields, Sage session, creds, accum/stop flags) can move in-bundle. Two
+  options (inline into Part2 vs single merged Part_345 sub-scenario) with op-savings + risk;
+  per-source `parity_diff` recipe for validating the merge.
 - **Operations-optimization review of Project1 (Part1–7).** Architect review against
   live Make consumption data identified the cross-scenario webhook fan-out (Part2 →
   Part3/4/5/6, per check) as the largest operations leak ("Leak A").
