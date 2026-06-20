@@ -52,3 +52,27 @@ pull <id> --out file   →   edit the JSON   →   qa file   →   qa-diff (old 
 before changing anything, and refuses to apply unless you pass `--yes`. If local QA
 finds structural errors it aborts (override with `--force`). Roll back by pushing the
 backup file.
+
+## 4. Structural-refactor parity gate (`parity_diff.py`)
+
+Stricter, refactor-specific companion to `qa-diff`. Enforces **0% functional change**
+when a refactor is meant to be *structural only* (e.g. the Leak A webhook-fan-out
+consolidation). It walks both blueprints module-by-module (including router routes) and
+reports any change to behavior-affecting fields — `parameters`, `mapper`, `filter`,
+`flags` — and **specifically flags the `limit=10` class of bug**: a field left blank in
+the original that silently gains a Make UI default.
+
+```bash
+# in-place edit of one scenario (modules keep their ids)
+python tools/parity_diff.py "Source code/PartX.blueprint.json" refactored.json
+
+# merge/renumber (ids change) — match by module type + name + path instead
+python tools/parity_diff.py baseline.json merged.json --by-name
+
+# machine-readable output for a CI gate
+python tools/parity_diff.py baseline.json refactored.json --json report.json
+```
+
+**Exit codes:** `0` = parity OK (safe) · `1` = HIGH/MEDIUM diffs (blocks deploy) ·
+`2` = load error. Pair with the QA checklist in [`docs/QA_Structural_Refactor_Checklist.md`](../docs/QA_Structural_Refactor_Checklist.md)
+(Static-testing section, Control #3).

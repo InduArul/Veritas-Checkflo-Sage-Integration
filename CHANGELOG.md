@@ -5,6 +5,18 @@ Each entry corresponds to a git commit.
 
 ## [Unreleased]
 
+### 2026-06-20
+- **Operations-optimization review of Project1 (Part1–7).** Architect review against
+  live Make consumption data identified the cross-scenario webhook fan-out (Part2 →
+  Part3/4/5/6, per check) as the largest operations leak ("Leak A").
+- **QA checklist (`docs/QA_Structural_Refactor_Checklist.md`).** Standard, reusable gate
+  for structural-only / 0%-functional-change refactors. Codifies the `limit=10`
+  blank→default regression as Control #1, plus static + Staging live-testing sections.
+- **Parity-diff gate (`tools/parity_diff.py`).** Module-by-module blueprint comparator
+  that blocks any behavior-affecting change (`parameters`/`mapper`/`filter`/`flags`),
+  with explicit detection of the `limit=10` default-risk class. Matches by module id or
+  (with `--by-name`) by type+name+path for merges. Exit 1 on HIGH/MEDIUM diffs for CI use.
+
 ### 2026-06-19
 - **Make API toolkit (`tools/make_cli.py`).** Zero-dependency Python CLI to connect
   the repo to the live Make.com scenarios via the REST API: read scenarios
