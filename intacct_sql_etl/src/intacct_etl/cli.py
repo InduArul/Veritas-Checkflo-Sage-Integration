@@ -13,7 +13,8 @@ import sys
 from datetime import date, datetime
 
 from . import config as cfgmod
-from . import dates, db, logging_setup, orchestrator, retry, sage_client, sage_transport
+from . import (audit, dates, db, logging_setup, orchestrator, retry, sage_client,
+               sage_transport)
 
 log = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ def _default_run_log(cfg, run_type, when):
 
 def main(argv=None, *, load_config=cfgmod.load_config, runner=orchestrator.run,
          load_secrets=None, sage_client_factory=None, connect=db.connect,
-         make_run_log=_default_run_log):
+         make_run_log=_default_run_log, persist_audit=audit.write_audit):
     ns = parse_args(argv if argv is not None else sys.argv[1:])
     cfg = load_config(ns.config)
     secrets = (load_secrets or _default_load_secrets)()
@@ -89,6 +90,13 @@ def main(argv=None, *, load_config=cfgmod.load_config, runner=orchestrator.run,
             run_log.flush()
         except Exception as exc:                            # don't mask the run result
             log.error("failed to flush run log: %s", exc)
+
+    # specs/12: persist the structured audit trail (never blocks the run)
+    run_audit = getattr(result, "audit", None)
+    if run_audit is not None:
+        path = persist_audit(run_audit, cfg.get("audit", {}))
+        if path:
+            log.info("audit trail written: %s", path)
 
     degraded = not getattr(result, "ok", True)
     for name, e in getattr(result, "environments", {}).items():

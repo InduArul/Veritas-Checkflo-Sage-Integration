@@ -56,6 +56,12 @@ Resolve these before coding the affected area. Owner in brackets.
   JSON body, attribute key names, nesting) MUST be confirmed against a real Sage response and the
   parsers/`xml_to_dict` validated in an integration test before go-live.
 
+- **OQ-15 [DBA] Insert vs update split for the audit trail.** The bulk procs
+  (`AddGLDetailBulk`/`AddAPBillBulk`) merge via OPENJSON and return only a total `rowcount` (if any).
+  The audit trail records `rows_affected` (total touched). A true inserted-vs-updated breakdown
+  (`specs/12` FR-AUD-5) requires the proc to OUTPUT counts or return a result set. Confirm whether the
+  procs can expose this; until then `rows_affected` is the monitored metric.
+
 - **OQ-13 [DBA] GL count `numremaining+1`.** Confirm this correctly equals total rows in all cases (it
   assumes the pagesize-1 probe returns 1 row + N remaining). Edge case: zero-row windows → numremaining=0
   → total=1 but no data; the `length(data)>0` guard handles it, but verify the page loop count.

@@ -50,6 +50,33 @@ def test_main_returns_nonzero_when_degraded():
     assert rc != 0
 
 
+def test_main_persists_audit_trail():
+    # specs/12: the entrypoint persists the run's audit trail via the configured sink
+    captured = {}
+
+    class R:
+        ok = True
+        environments = {}
+        audit = object()                          # sentinel audit record
+
+    def fake_runner(cfg, secrets, *, today, **kw):
+        return R()
+
+    def fake_persist_audit(run_audit, audit_cfg):
+        captured["audit"] = run_audit
+        captured["cfg"] = audit_cfg
+        return "audit.json"
+
+    rc = cli.main(["--config", "x.yaml", "--today", "2026-06-24"],
+                  load_config=lambda p: {"run": {}, "log": {"sink": "stdout"},
+                                         "audit": {"enabled": True, "sink": "stdout"}},
+                  runner=fake_runner, load_secrets=lambda: {},
+                  persist_audit=fake_persist_audit)
+    assert rc == 0
+    assert captured["audit"] is R.audit
+    assert captured["cfg"] == {"enabled": True, "sink": "stdout"}
+
+
 def test_main_builds_and_flushes_run_log():
     # CR-05: the entrypoint must construct a RunLog and pass it to the runner, then flush it.
     captured = {}

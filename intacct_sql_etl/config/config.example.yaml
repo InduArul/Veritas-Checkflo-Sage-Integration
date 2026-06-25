@@ -86,3 +86,11 @@ log:
   file_name_pattern: "{run_type}run_log_{date}.txt"   # {date} = MMDDYYYY
   sharepoint_upload: false            # parity option (OQ-6)
   sharepoint_folder: "/Veritas Integrations/Intaact feeds to SQL Server/Logs"
+
+audit:                                # structured run/step metrics for analysis (specs/12)
+  enabled: true
+  sink: file                          # file | stdout
+  dir: "./audit"                      # configurable location (created if missing)
+  format: json                        # json (one file per run) | jsonl (appended trend log)
+  file_name_pattern: "audit_{run_type}_{run_id}.json"   # {run_id} = YYYYMMDD_HHMMSS
+  jsonl_file_name: "audit_trail.jsonl"                  # used when format: jsonl

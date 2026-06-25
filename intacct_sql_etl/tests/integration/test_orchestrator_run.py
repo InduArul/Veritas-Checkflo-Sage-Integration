@@ -41,6 +41,7 @@ def base_cfg(**over):
 class FakeCursor:
     def __init__(self, sink):
         self.sink = sink
+        self.rowcount = 1
 
     def execute(self, sql, params=None):
         self.sink.append((sql, params))
@@ -224,6 +225,61 @@ def test_rollback_failure_is_recorded_not_swallowed():
     assert entry["error"] is not None
     assert entry["rollback_error"] is not None
     assert conns[0].closes == 1
+
+
+def test_run_builds_audit_trail():
+    # specs/12: a structured audit record is attached to the result
+    from datetime import datetime
+    cfg = base_cfg()
+    fixed = datetime(2026, 6, 25, 8, 0, 0)
+    res, _ = _run_with_clock(cfg, now=lambda: fixed)
+    aud = res.audit
+    assert aud is not None
+    assert aud.run_type == "daily"
+    assert aud.run_id == "20260625_080000"
+    env = aud.environments[0]
+    assert env.name == "Evergreen"
+    assert env.gl_read == 12 and env.ap_read == 8           # 4 chunks * (3 GL + 2 AP)
+    assert env.gl_loaded == 12 and env.ap_loaded == 8
+    assert env.status == "ok"
+    assert env.failed == 0
+    assert env.extract_s >= 0 and env.transform_s >= 0 and env.load_s >= 0
+    assert env.started_at is not None and env.finished_at is not None
+    d = aud.to_dict()
+    assert d["totals"]["read"] == 20 and d["totals"]["loaded"] == 20
+
+
+def test_audit_marks_failed_environment():
+    cfg = base_cfg()
+    res, _ = _run_with_clock(cfg, client=FakeClient({}, raise_on_gl=True))
+    env = res.audit.environments[0]
+    assert env.status == "failed"
+    assert env.gl_loaded == 0 and env.ap_loaded == 0        # rolled back -> nothing committed
+    assert res.audit.to_dict()["ok"] is False
+
+
+def _run_with_clock(cfg, *, client=None, now=None):
+    from datetime import datetime
+    conns = []
+
+    def connect(sql_cfg, secrets):
+        c = FakeConn()
+        conns.append(c)
+        return c
+
+    def factory(creds):
+        return client or FakeClient(creds)
+
+    box = {"n": 0}
+
+    def clock():
+        box["n"] += 1
+        return box["n"]
+
+    res = orchestrator.run(cfg, secrets={}, today=date(2026, 6, 24),
+                           sage_client_factory=factory, connect=connect,
+                           clock=clock, now=now or (lambda: datetime(2026, 6, 25, 8, 0, 0)))
+    return res, conns
 
 
 def test_query_options_flow_from_config():

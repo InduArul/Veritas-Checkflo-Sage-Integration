@@ -11,9 +11,10 @@ from intacct_etl import config, sql_loader
 
 
 class FakeCursor:
-    def __init__(self):
+    def __init__(self, rowcount=7):
         self.calls = []
         self.closed = False
+        self.rowcount = rowcount
 
     def execute(self, sql, params=None):
         self.calls.append((sql, params))
@@ -95,6 +96,36 @@ def test_load_closes_cursor():
     loader = sql_loader.SqlLoader(conn, TEST_SQL_CFG)
     loader.load_gl_records(_records(2), page_size=10)
     assert conn.cur.closed is True
+
+
+def _counter():
+    box = {"n": 0}
+
+    def clock():
+        box["n"] += 1
+        return box["n"]
+
+    return clock
+
+
+def test_loader_captures_metrics():
+    # specs/12 FR-AUD-3/4: pages, rows_affected, encode + db timings per object
+    conn = FakeConnection()
+    loader = sql_loader.SqlLoader(conn, TEST_SQL_CFG, clock=_counter())
+    loader.load_gl_records(_records(5), page_size=2)      # 5 rows / 2 -> 3 pages
+    m = loader.metrics
+    assert m.gl_pages == 3
+    assert m.gl_rows_affected == 3 * 7                    # FakeCursor.rowcount == 7 per page
+    assert m.gl_encode_s == 3.0 and m.gl_db_s == 3.0      # 1.0s each per page (fake clock)
+
+
+def test_wipe_and_reconcile_timed():
+    conn = FakeConnection()
+    loader = sql_loader.SqlLoader(conn, TEST_SQL_CFG, clock=_counter())
+    loader.wipe_window("2026-01-01", "2026-01-31")
+    loader.run_reconcile("2026-01-01", "2026-01-31")
+    assert loader.metrics.wipe_s > 0
+    assert loader.metrics.reconcile_s > 0
 
 
 def test_wipe_window_rejects_unsafe_identifier():

@@ -85,6 +85,17 @@ The canonical template is `config/config.example.yaml`.
 | `log.sharepoint_upload` | `false` | module 119 | optional parity (OQ-6) |
 | `log.sharepoint_folder` | `/Veritas Integrations/Intaact feeds to SQL Server/Logs` | module 119 | if enabled |
 | `log.file_name_pattern` | `{run_type}run_log_{MMDDYYYY}.txt` | module 119 | matches Make naming |
+| `log.level` | `INFO` | — | stdlib logging level |
+
+### Audit trail (see `12`)
+| Config key | Default | Notes |
+|---|---|---|
+| `audit.enabled` | `true` | emit structured run/step metrics |
+| `audit.sink` | `file` | `file`/`stdout` |
+| `audit.dir` | `./audit` | configurable location (created if missing) |
+| `audit.format` | `json` | `json` (one file/run) or `jsonl` (appended trend log) |
+| `audit.file_name_pattern` | `audit_{run_type}_{run_id}.json` | `{run_id}` = `YYYYMMDD_HHMMSS` |
+| `audit.jsonl_file_name` | `audit_trail.jsonl` | used when `format: jsonl` |
 
 ## 6.2 Secrets handling (NFR-4)
 - Secrets (`sage.*_password`, `sql.password`, AAD tokens) resolved from env vars / `.env` / a secret

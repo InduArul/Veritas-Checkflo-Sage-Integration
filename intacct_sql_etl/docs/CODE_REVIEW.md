@@ -190,3 +190,19 @@ etc. improves readability.
 | CR-21 | cryptic locals renamed (`reconcile.py`) | existing reconcile tests | ✅ |
 
 **Verification:** `PYTHONPATH=src python -m pytest -q` → **140 passed**.
+
+---
+
+## E. Audit-trail layer (2026-06-25 — added, self-reviewed clean)
+
+New observability layer per `specs/12` (`audit.py`, `LoaderMetrics`, orchestrator/cli wiring).
+Reviewed against the same checklist — **0 new findings**:
+- **Logging:** uses stdlib `logging`; `write_audit` logs on failure.
+- **Exception handling:** `write_audit` swallows at the I/O boundary **by design** (FR-AUD-7: audit must
+  never fail the ETL) and logs the error — documented, not a silent swallow.
+- **Resource mgmt:** files via `with`; no new connections/cursors.
+- **No hardcoding:** sink/dir/format/patterns all config-driven (`audit.*`); clock/`now` injected.
+- **Security:** counts/timings/identifiers only — no secrets/payloads (FR-AUD-8).
+- **Naming/DRY/OOP:** dataclasses (`EnvAudit`/`RunAudit`/`LoaderMetrics`), `record_page` helper, no dupes.
+
+**Verification:** `PYTHONPATH=src python -m pytest -q` → **152 passed** (140 + 12 audit tests).

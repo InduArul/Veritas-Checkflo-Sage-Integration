@@ -12,7 +12,9 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from typing import Callable
 
+from . import audit as auditmod
 from . import config as cfgmod
 from . import dates
 from .sage_client import SageError
@@ -37,6 +39,7 @@ class RunResult:
     start: date
     end: date
     environments: dict = field(default_factory=dict)
+    audit: object = None                            # audit.RunAudit (specs/12)
 
     @property
     def ok(self) -> bool:
@@ -103,15 +106,21 @@ def _query_opts(cfg: dict) -> tuple[dict, dict]:
 
 def _process_environment(env, *, cfg, secrets, start, end, chunks, granularity, page_size,
                          require_test, strategy, gl_opts, ap_opts, connect,
-                         sage_client_factory, settle_s, sleep, run_log) -> dict:
+                         sage_client_factory, settle_s, sleep, run_log,
+                         clock, now) -> tuple[dict, "auditmod.EnvAudit"]:
     """Run one environment end-to-end inside a single transaction (CR-12 extraction).
 
-    Returns the result entry. Never raises — per-environment failures are isolated and recorded
-    so one environment cannot corrupt another (specs/07 §7.5).
+    Returns (result entry, EnvAudit). Never raises — per-environment failures are isolated and
+    recorded so one environment cannot corrupt another (specs/07 §7.5). Per-step timings/counts are
+    captured for the audit trail (specs/12).
     """
     name = env["name"]
     entry = _new_entry()
     conn = None
+    loader = None
+    extract_s = 0.0
+    started_at = now()
+    t_start = clock()
     try:
         if strategy != "transaction":
             raise NotImplementedError(
@@ -119,13 +128,15 @@ def _process_environment(env, *, cfg, secrets, start, end, chunks, granularity, 
             )
         creds = cfgmod.resolve_env_creds(cfg, env, secrets)
         conn = connect(cfg["sql"], secrets)
-        loader = SqlLoader(conn, cfg["sql"], require_test_targets=require_test)
+        loader = SqlLoader(conn, cfg["sql"], require_test_targets=require_test, clock=clock)
         client = sage_client_factory(creds)
 
         loader.wipe_window(start, end, commit=False)
         session_id = client.login()
         for cs, ce in chunks:
+            te = clock()
             gl, gl_err = client.fetch_gl(session_id, cs, ce, page_size=page_size, **gl_opts)
+            extract_s += clock() - te
             if gl_err:
                 entry["gl_errors"].append(gl_err)
                 entry["gl_error"] = entry["gl_error"] or gl_err
@@ -133,7 +144,9 @@ def _process_environment(env, *, cfg, secrets, start, end, chunks, granularity, 
             entry["gl_records"] += len(gl)
             entry["gl_loaded"] += loader.load_gl_records(gl, page_size=page_size, commit=False)
 
+            te = clock()
             ap, ap_err = client.fetch_ap(session_id, cs, ce, page_size=page_size, **ap_opts)
+            extract_s += clock() - te
             if ap_err:
                 entry["ap_errors"].append(ap_err)
                 entry["ap_error"] = entry["ap_error"] or ap_err
@@ -181,11 +194,52 @@ def _process_environment(env, *, cfg, secrets, start, end, chunks, granularity, 
             except Exception as ce_err:
                 entry["close_error"] = str(ce_err) or ce_err.__class__.__name__
                 log.warning("%s: connection close failed: %s", name, entry["close_error"])
-    return entry
+
+    env_audit = _build_env_audit(name, entry, loader, extract_s=extract_s,
+                                 started_at=started_at, finished_at=now(),
+                                 duration_s=clock() - t_start)
+    return entry, env_audit
+
+
+def _build_env_audit(name, entry, loader, *, extract_s, started_at, finished_at,
+                     duration_s) -> "auditmod.EnvAudit":
+    """Assemble the per-environment audit record from the run entry + loader metrics (specs/12)."""
+    committed = entry["error"] is None
+    degraded = bool(entry["gl_errors"] or entry["ap_errors"])
+    status = "failed" if not committed else ("degraded" if degraded else "ok")
+    failed = (entry["gl_records"] + entry["ap_records"]) if not committed else 0
+
+    gl_pages = getattr(loader.metrics, "gl_pages", 0) if loader else 0
+    ap_pages = getattr(loader.metrics, "ap_pages", 0) if loader else 0
+    gl_affected = getattr(loader.metrics, "gl_rows_affected", 0) if (loader and committed) else 0
+    ap_affected = getattr(loader.metrics, "ap_rows_affected", 0) if (loader and committed) else 0
+    transform_s = (getattr(loader.metrics, "gl_encode_s", 0.0)
+                   + getattr(loader.metrics, "ap_encode_s", 0.0)) if loader else 0.0
+    load_s = (getattr(loader.metrics, "gl_db_s", 0.0)
+              + getattr(loader.metrics, "ap_db_s", 0.0)) if loader else 0.0
+    wipe_s = getattr(loader.metrics, "wipe_s", 0.0) if loader else 0.0
+    reconcile_s = getattr(loader.metrics, "reconcile_s", 0.0) if loader else 0.0
+
+    return auditmod.EnvAudit(
+        name=name, status=status,
+        gl_read=entry["gl_records"], ap_read=entry["ap_records"],
+        gl_loaded=entry["gl_loaded"] if committed else 0,
+        ap_loaded=entry["ap_loaded"] if committed else 0,
+        gl_rows_affected=gl_affected, ap_rows_affected=ap_affected,
+        gl_pages=gl_pages, ap_pages=ap_pages, failed=failed,
+        extract_s=extract_s, transform_s=transform_s, load_s=load_s,
+        wipe_s=wipe_s, reconcile_s=reconcile_s, duration_s=duration_s,
+        started_at=started_at.isoformat() if started_at else None,
+        finished_at=finished_at.isoformat() if finished_at else None,
+        error=entry["error"], rollback_error=entry["rollback_error"],
+        gl_errors=list(entry["gl_errors"]), ap_errors=list(entry["ap_errors"]),
+    )
 
 
 def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
-        run_log=None, sleep=time.sleep) -> RunResult:
+        run_log=None, sleep=time.sleep, clock: Callable[[], float] = time.monotonic,
+        now: Callable[[], datetime] = None) -> RunResult:
+    now = now or datetime.now
     run_cfg = cfg.get("run", {})
     run_type, start, end = _derive(today, run_cfg)
     chunks = dates.month_chunks(start, end)
@@ -196,7 +250,13 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
     settle_s = cfg.get("retry", {}).get("reconcile_settle_s", 0) or 0
     gl_opts, ap_opts = _query_opts(cfg)
 
-    result = RunResult(run_type=run_type, start=start, end=end)
+    started = now()
+    t_run = clock()
+    run_audit = auditmod.RunAudit(
+        run_id=started.strftime("%Y%m%d_%H%M%S"), run_type=run_type,
+        window_start=str(start), window_end=str(end), started_at=started.isoformat(),
+    )
+    result = RunResult(run_type=run_type, start=start, end=end, audit=run_audit)
     log.info("Start of process: run_type=%s window=%s..%s", run_type, start, end)
     if run_log:
         run_log.add("Start of process")
@@ -205,14 +265,23 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
     for env in cfg.get("environments", []):
         if not env.get("enabled", True):
             continue
-        entry = _process_environment(
+        entry, env_audit = _process_environment(
             env, cfg=cfg, secrets=secrets, start=start, end=end, chunks=chunks,
             granularity=granularity, page_size=page_size, require_test=require_test,
             strategy=strategy, gl_opts=gl_opts, ap_opts=ap_opts, connect=connect,
             sage_client_factory=sage_client_factory, settle_s=settle_s, sleep=sleep,
-            run_log=run_log,
+            run_log=run_log, clock=clock, now=now,
         )
         result.environments[env["name"]] = entry
+        run_audit.environments.append(env_audit)
 
-    log.info("End of process: ok=%s", result.ok)
+    run_audit.finished_at = now().isoformat()
+    run_audit.duration_s = clock() - t_run
+    if run_log:
+        t = run_audit.totals()
+        run_log.add(
+            f"End of process: read={t['read']} loaded={t['loaded']} "
+            f"failed={t['failed']} ok={result.ok}"
+        )
+    log.info("End of process: ok=%s totals=%s", result.ok, run_audit.totals())
     return result
