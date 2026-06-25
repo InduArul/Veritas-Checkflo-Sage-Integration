@@ -1,0 +1,4787 @@
+{
+  "flow": [
+    {
+      "id": 158,
+      "mapper": {},
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "hook": {
+              "data": {
+                "editable": "true"
+              },
+              "label": "Daily_run"
+            }
+          }
+        },
+        "designer": {
+          "x": 0,
+          "y": 2100
+        },
+        "parameters": [
+          {
+            "name": "hook",
+            "type": "hook:gateway-webhook",
+            "label": "Webhook",
+            "required": true
+          },
+          {
+            "name": "maxResults",
+            "type": "number",
+            "label": "Maximum number of results"
+          }
+        ]
+      },
+      "parameters": {
+        "hook": 748767,
+        "maxResults": 1
+      }
+    },
+    {
+      "id": 2,
+      "mapper": {
+        "scope": "roundtrip",
+        "variables": [
+          {
+            "name": "Today_date",
+            "value": "{{158.Report_end_date}}"
+          },
+          {
+            "name": "Report_start_date",
+            "value": "{{158.Report_start_date}}"
+          }
+        ]
+      },
+      "module": "util:SetVariables",
+      "onerror": [
+        {
+          "id": 154,
+          "mapper": {
+            "count": "3",
+            "retry": true,
+            "interval": "15"
+          },
+          "module": "builtin:Break",
+          "version": 1,
+          "metadata": {
+            "expect": [
+              {
+                "name": "retry",
+                "type": "boolean",
+                "label": "Automatically complete execution",
+                "required": true
+              },
+              {
+                "name": "count",
+                "type": "uinteger",
+                "label": "Number of attempts",
+                "required": true,
+                "validate": {
+                  "max": 10000,
+                  "min": 1
+                }
+              },
+              {
+                "name": "interval",
+                "type": "uinteger",
+                "label": "Interval between attempts",
+                "required": true,
+                "validate": {
+                  "max": 44640,
+                  "min": 1
+                }
+              }
+            ],
+            "restore": {
+              "expect": {
+                "retry": {
+                  "mode": "chose"
+                }
+              }
+            },
+            "designer": {
+              "x": 600,
+              "y": 4200
+            }
+          },
+          "parameters": {}
+        }
+      ],
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "variables",
+            "spec": [
+              {
+                "name": "name",
+                "type": "text",
+                "label": "Variable name",
+                "required": true
+              },
+              {
+                "name": "value",
+                "type": "any",
+                "label": "Variable value"
+              }
+            ],
+            "type": "array",
+            "label": "Variables"
+          },
+          {
+            "name": "scope",
+            "type": "select",
+            "label": "Variable lifetime",
+            "required": true,
+            "validate": {
+              "enum": [
+                "roundtrip",
+                "execution"
+              ]
+            }
+          }
+        ],
+        "restore": {
+          "expect": {
+            "scope": {
+              "label": "One cycle"
+            },
+            "variables": {
+              "items": [
+                null,
+                null
+              ]
+            }
+          }
+        },
+        "designer": {
+          "x": 300,
+          "y": 2100
+        },
+        "interface": [
+          {
+            "name": "Today_date",
+            "type": "any",
+            "label": "Today_date"
+          },
+          {
+            "name": "Report_start_date",
+            "type": "any",
+            "label": "Report_start_date"
+          }
+        ]
+      },
+      "parameters": {}
+    },
+    {
+      "id": 1,
+      "mapper": {
+        "site": "veritashcsolutions.sharepoint.com,63c7d06b-148b-4189-811c-5929df4c94ae,f64c3437-7ff8-45ba-ab34-03be0203669f",
+        "drive": "b!a9DHY4sUiUGBHFkp30yUrjc0TPb4f7pFqzQDvgIDZp-hLGrLFo5STILpD6_0hItb",
+        "table": "Env_data",
+        "select": "list",
+        "selectB": "site",
+        "workbook": "01LVSGUWCQGZYDII6MQVCJ5OYQPNJIIWUL/01LVSGUWBHWC76KGRKSBCZ5UOEMVGXXYWO/01LVSGUWEPUFVZK5DL5JF2UCMGYE2NA36K",
+        "worksheet": "Sheet1"
+      },
+      "module": "microsoft-excel:listTableRows",
+      "onerror": [
+        {
+          "id": 155,
+          "mapper": {
+            "count": "3",
+            "retry": true,
+            "interval": "15"
+          },
+          "module": "builtin:Break",
+          "version": 1,
+          "metadata": {
+            "expect": [
+              {
+                "name": "retry",
+                "type": "boolean",
+                "label": "Automatically complete execution",
+                "required": true
+              },
+              {
+                "name": "count",
+                "type": "uinteger",
+                "label": "Number of attempts",
+                "required": true,
+                "validate": {
+                  "max": 10000,
+                  "min": 1
+                }
+              },
+              {
+                "name": "interval",
+                "type": "uinteger",
+                "label": "Interval between attempts",
+                "required": true,
+                "validate": {
+                  "max": 44640,
+                  "min": 1
+                }
+              }
+            ],
+            "restore": {
+              "expect": {
+                "retry": {
+                  "mode": "chose"
+                }
+              }
+            },
+            "designer": {
+              "x": 900,
+              "y": 3900
+            }
+          },
+          "parameters": {}
+        }
+      ],
+      "version": 2,
+      "metadata": {
+        "expect": [
+          {
+            "name": "select",
+            "type": "select",
+            "label": "Select a method",
+            "required": true,
+            "validate": {
+              "enum": [
+                "map",
+                "list"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "type": "uinteger",
+            "label": "Limit"
+          },
+          {
+            "name": "selectB",
+            "type": "select",
+            "label": "Choose your OneDrive location",
+            "required": true,
+            "validate": {
+              "enum": [
+                "my",
+                "site",
+                "group"
+              ]
+            }
+          },
+          {
+            "name": "site",
+            "type": "select",
+            "label": "Site ID",
+            "required": true
+          },
+          {
+            "name": "drive",
+            "type": "select",
+            "label": "Drive ID",
+            "required": true
+          },
+          {
+            "name": "workbook",
+            "type": "file",
+            "label": "Workbook",
+            "required": true
+          },
+          {
+            "name": "worksheet",
+            "type": "select",
+            "label": "Worksheet",
+            "required": true
+          },
+          {
+            "name": "table",
+            "type": "select",
+            "label": "Table",
+            "required": true
+          }
+        ],
+        "restore": {
+          "expect": {
+            "site": {
+              "label": "Internal"
+            },
+            "drive": {
+              "label": "Integrations (documentLibrary)"
+            },
+            "limit": {
+              "empty": true
+            },
+            "table": {
+              "mode": "chose",
+              "label": "Env_data"
+            },
+            "select": {
+              "label": "Select from the list"
+            },
+            "selectB": {
+              "label": "Site's Drive"
+            },
+            "workbook": {
+              "path": [
+                "Veritas Integrations",
+                "Intaact feeds to SQL Server",
+                "Config.xlsx"
+              ]
+            },
+            "worksheet": {
+              "mode": "chose",
+              "label": "Sheet1",
+              "nested": [
+                {
+                  "name": "table",
+                  "type": "select",
+                  "label": "Table",
+                  "options": "rpc://microsoft-excel/2/listTables",
+                  "required": true
+                }
+              ]
+            }
+          },
+          "parameters": {
+            "__IMTCONN__": {
+              "data": {
+                "scoped": "true",
+                "connection": "azure"
+              },
+              "label": "Veritas_Sharepoint_Connection (TimeClock Plus)"
+            }
+          }
+        },
+        "designer": {
+          "x": 600,
+          "y": 1950
+        },
+        "interface": [
+          {
+            "name": "__IMTLENGTH__",
+            "type": "uinteger",
+            "label": "Total number of bundles"
+          },
+          {
+            "name": "__IMTINDEX__",
+            "type": "uinteger",
+            "label": "Bundle order position"
+          },
+          {
+            "name": "@odata.id",
+            "type": "text",
+            "label": "@Odata ID"
+          },
+          {
+            "name": "index",
+            "type": "text",
+            "label": "Table Row ID"
+          },
+          {
+            "name": "values",
+            "spec": [
+              {
+                "name": "0",
+                "type": "text",
+                "label": "Env_Name"
+              }
+            ],
+            "type": "collection",
+            "label": "Row"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "__IMTCONN__",
+            "type": "account:azure",
+            "label": "Connection",
+            "required": true
+          }
+        ]
+      },
+      "parameters": {
+        "__IMTCONN__": 450334
+      }
+    },
+    {
+      "id": 3,
+      "mapper": {
+        "key": "Prod_Sage_{{1.values.`0`}}",
+        "returnWrapped": false
+      },
+      "module": "datastore:GetRecord",
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "key",
+            "type": "text",
+            "label": "Key",
+            "required": true
+          },
+          {
+            "name": "returnWrapped",
+            "type": "boolean",
+            "label": "Return Wrapped Output",
+            "required": true
+          }
+        ],
+        "restore": {
+          "parameters": {
+            "datastore": {
+              "label": "Sage_creds"
+            }
+          }
+        },
+        "designer": {
+          "x": 900,
+          "y": 1800
+        },
+        "interface": [
+          {
+            "name": "URL",
+            "type": "text",
+            "label": null,
+            "default": null,
+            "required": false,
+            "multiline": false
+          },
+          {
+            "name": "sender_id",
+            "type": "text",
+            "label": null,
+            "default": null,
+            "required": false,
+            "multiline": false
+          },
+          {
+            "name": "sender_password",
+            "type": "text",
+            "label": null,
+            "default": null,
+            "required": false,
+            "multiline": false
+          },
+          {
+            "name": "company_id",
+            "type": "text",
+            "label": null,
+            "default": null,
+            "required": false,
+            "multiline": false
+          },
+          {
+            "name": "user_id",
+            "type": "text",
+            "label": null,
+            "default": null,
+            "required": false,
+            "multiline": false
+          },
+          {
+            "name": "user_password",
+            "type": "text",
+            "label": null,
+            "default": null,
+            "required": false,
+            "multiline": false
+          }
+        ],
+        "parameters": [
+          {
+            "name": "datastore",
+            "type": "datastore",
+            "label": "Data store",
+            "required": true
+          }
+        ]
+      },
+      "parameters": {
+        "datastore": 1862
+      }
+    },
+    {
+      "id": 102,
+      "mapper": {
+        "key": "1",
+        "returnWrapped": false
+      },
+      "module": "datastore:GetRecord",
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "key",
+            "type": "text",
+            "label": "Key",
+            "required": true
+          },
+          {
+            "name": "returnWrapped",
+            "type": "boolean",
+            "label": "Return Wrapped Output",
+            "required": true
+          }
+        ],
+        "restore": {
+          "parameters": {
+            "datastore": {
+              "label": "Log_text_SQLFeeds"
+            }
+          }
+        },
+        "designer": {
+          "x": 1200,
+          "y": 1800
+        },
+        "interface": [
+          {
+            "help": "",
+            "name": "Description",
+            "type": "text",
+            "label": null,
+            "default": null,
+            "required": false,
+            "multiline": true
+          }
+        ],
+        "parameters": [
+          {
+            "name": "datastore",
+            "type": "datastore",
+            "label": "Data store",
+            "required": true
+          }
+        ]
+      },
+      "parameters": {
+        "datastore": 23497
+      }
+    },
+    {
+      "id": 103,
+      "mapper": {
+        "key": "1",
+        "data": {
+          "Description": "{{102.Description}}Processing data for \"{{1.values.`0`}}\" environment{{newline}}"
+        },
+        "upsert": false,
+        "overwriteArrays": false
+      },
+      "module": "datastore:UpdateRecord",
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "key",
+            "type": "text",
+            "label": "Key",
+            "required": true
+          },
+          {
+            "name": "upsert",
+            "type": "boolean",
+            "label": "Insert missing record",
+            "required": true
+          },
+          {
+            "name": "overwriteArrays",
+            "type": "boolean",
+            "label": "Overwrite an existing array in the record",
+            "required": true
+          },
+          {
+            "name": "data",
+            "spec": [
+              {
+                "name": "Description",
+                "type": "text",
+                "label": null
+              }
+            ],
+            "type": "collection",
+            "label": "Record"
+          }
+        ],
+        "restore": {
+          "expect": {
+            "upsert": {
+              "mode": "chose"
+            },
+            "overwriteArrays": {
+              "mode": "chose"
+            }
+          },
+          "parameters": {
+            "datastore": {
+              "label": "Log_text_SQLFeeds"
+            }
+          }
+        },
+        "designer": {
+          "x": 1500,
+          "y": 1800
+        },
+        "parameters": [
+          {
+            "name": "datastore",
+            "type": "datastore",
+            "label": "Data store",
+            "required": true
+          }
+        ]
+      },
+      "parameters": {
+        "datastore": 23497
+      }
+    },
+    {
+      "id": 90,
+      "mapper": {
+        "scope": "roundtrip",
+        "variables": [
+          {
+            "name": "Sage_URL",
+            "value": "{{3.URL}}"
+          },
+          {
+            "name": "Sage_sender_id",
+            "value": "{{3.sender_id}}"
+          },
+          {
+            "name": "Sage_Sender_pass",
+            "value": "{{3.sender_password}}"
+          },
+          {
+            "name": "Sage_Company_ID",
+            "value": "{{3.company_id}}"
+          },
+          {
+            "name": "Sage_user_id",
+            "value": "{{3.user_id}}"
+          },
+          {
+            "name": "Sage_User_Password",
+            "value": "{{3.user_password}}"
+          }
+        ]
+      },
+      "module": "util:SetVariables",
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "variables",
+            "spec": [
+              {
+                "name": "name",
+                "type": "text",
+                "label": "Variable name",
+                "required": true
+              },
+              {
+                "name": "value",
+                "type": "any",
+                "label": "Variable value"
+              }
+            ],
+            "type": "array",
+            "label": "Variables"
+          },
+          {
+            "name": "scope",
+            "type": "select",
+            "label": "Variable lifetime",
+            "required": true,
+            "validate": {
+              "enum": [
+                "roundtrip",
+                "execution"
+              ]
+            }
+          }
+        ],
+        "restore": {
+          "expect": {
+            "scope": {
+              "label": "One cycle"
+            },
+            "variables": {
+              "items": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ]
+            }
+          }
+        },
+        "designer": {
+          "x": 1800,
+          "y": 1800
+        },
+        "interface": [
+          {
+            "name": "Sage_URL",
+            "type": "any",
+            "label": "Sage_URL"
+          },
+          {
+            "name": "Sage_sender_id",
+            "type": "any",
+            "label": "Sage_sender_id"
+          },
+          {
+            "name": "Sage_Sender_pass",
+            "type": "any",
+            "label": "Sage_Sender_pass"
+          },
+          {
+            "name": "Sage_Company_ID",
+            "type": "any",
+            "label": "Sage_Company_ID"
+          },
+          {
+            "name": "Sage_user_id",
+            "type": "any",
+            "label": "Sage_user_id"
+          },
+          {
+            "name": "Sage_User_Password",
+            "type": "any",
+            "label": "Sage_User_Password"
+          }
+        ]
+      },
+      "parameters": {}
+    },
+    {
+      "id": 11,
+      "mapper": {
+        "variables": [
+          "Sage_URL",
+          "Sage_sender_id",
+          "Sage_Sender_pass",
+          "Sage_Company_ID",
+          "Sage_user_id",
+          "Sage_User_Password"
+        ]
+      },
+      "module": "util:GetVariables",
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "variables",
+            "spec": {
+              "name": "value",
+              "type": "text",
+              "label": "Variable name",
+              "required": true
+            },
+            "type": "array",
+            "label": "Variables"
+          }
+        ],
+        "restore": {
+          "expect": {
+            "variables": {
+              "items": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ]
+            }
+          }
+        },
+        "designer": {
+          "x": 2100,
+          "y": 1800
+        },
+        "interface": [
+          {
+            "name": "Sage_URL",
+            "type": "any",
+            "label": "Sage_URL"
+          },
+          {
+            "name": "Sage_sender_id",
+            "type": "any",
+            "label": "Sage_sender_id"
+          },
+          {
+            "name": "Sage_Sender_pass",
+            "type": "any",
+            "label": "Sage_Sender_pass"
+          },
+          {
+            "name": "Sage_Company_ID",
+            "type": "any",
+            "label": "Sage_Company_ID"
+          },
+          {
+            "name": "Sage_user_id",
+            "type": "any",
+            "label": "Sage_user_id"
+          },
+          {
+            "name": "Sage_User_Password",
+            "type": "any",
+            "label": "Sage_User_Password"
+          }
+        ]
+      },
+      "parameters": {}
+    },
+    {
+      "id": 12,
+      "mapper": {
+        "ca": "",
+        "qs": [],
+        "url": "{{11.Sage_URL}}",
+        "data": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n  <control>\n    <senderid>{{11.Sage_sender_id}}</senderid>\n    <password><![CDATA[{{11.Sage_Sender_pass}}]]></password>\n    <controlid></controlid>\n    <uniqueid>false</uniqueid>\n    <dtdversion>3.0</dtdversion>\n    <includewhitespace>false</includewhitespace>\n  </control>\n  <operation>\n    <authentication>\n      <login>\n        <userid>{{11.Sage_user_id}}</userid>\n        <companyid>{{11.Sage_Company_ID}}</companyid>\n        <password><![CDATA[{{11.Sage_User_Password}}]]></password>\n        <locationid></locationid>\n      </login>\n    </authentication>\n    <content>\n      <function controlid=\"\">\n        <getAPISession />\n      </function>\n    </content>\n  </operation>\n</request>",
+        "gzip": true,
+        "method": "post",
+        "headers": [],
+        "timeout": "",
+        "useMtls": false,
+        "authPass": "",
+        "authUser": "",
+        "bodyType": "raw",
+        "contentType": "application/xml",
+        "serializeUrl": false,
+        "shareCookies": "[REDACTED]",
+        "parseResponse": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "followAllRedirects": false,
+        "rejectUnauthorized": true
+      },
+      "module": "http:ActionSendData",
+      "onerror": [
+        {
+          "id": 152,
+          "mapper": {
+            "count": "3",
+            "retry": true,
+            "interval": "15"
+          },
+          "module": "builtin:Break",
+          "version": 1,
+          "metadata": {
+            "expect": [
+              {
+                "name": "retry",
+                "type": "boolean",
+                "label": "Automatically complete execution",
+                "required": true
+              },
+              {
+                "name": "count",
+                "type": "uinteger",
+                "label": "Number of attempts",
+                "required": true,
+                "validate": {
+                  "max": 10000,
+                  "min": 1
+                }
+              },
+              {
+                "name": "interval",
+                "type": "uinteger",
+                "label": "Interval between attempts",
+                "required": true,
+                "validate": {
+                  "max": 44640,
+                  "min": 1
+                }
+              }
+            ],
+            "restore": {
+              "expect": {
+                "retry": {
+                  "mode": "chose"
+                }
+              }
+            },
+            "designer": {
+              "x": 2700,
+              "y": 3600
+            }
+          },
+          "parameters": {}
+        }
+      ],
+      "version": 3,
+      "metadata": {
+        "expect": [
+          {
+            "name": "url",
+            "type": "url",
+            "label": "URL",
+            "required": true
+          },
+          {
+            "name": "serializeUrl",
+            "type": "boolean",
+            "label": "Serialize URL",
+            "required": true
+          },
+          {
+            "name": "method",
+            "type": "select",
+            "label": "Method",
+            "required": true,
+            "validate": {
+              "enum": [
+                "get",
+                "head",
+                "post",
+                "put",
+                "patch",
+                "delete",
+                "options"
+              ]
+            }
+          },
+          {
+            "name": "headers",
+            "spec": [
+              {
+                "name": "name",
+                "type": "text",
+                "label": "Name",
+                "required": true
+              },
+              {
+                "name": "value",
+                "type": "text",
+                "label": "Value"
+              }
+            ],
+            "type": "array",
+            "label": "Headers"
+          },
+          {
+            "name": "qs",
+            "spec": [
+              {
+                "name": "name",
+                "type": "text",
+                "label": "Name",
+                "required": true
+              },
+              {
+                "name": "value",
+                "type": "text",
+                "label": "Value"
+              }
+            ],
+            "type": "array",
+            "label": "Query String"
+          },
+          {
+            "name": "bodyType",
+            "type": "select",
+            "label": "Body type",
+            "validate": {
+              "enum": [
+                "raw",
+                "x_www_form_urlencoded",
+                "multipart_form_data"
+              ]
+            }
+          },
+          {
+            "name": "parseResponse",
+            "type": "boolean",
+            "label": "Parse response",
+            "required": true
+          },
+          {
+            "name": "authUser",
+            "type": "text",
+            "label": "User name"
+          },
+          {
+            "name": "authPass",
+            "type": "password",
+            "label": "Password"
+          },
+          {
+            "name": "timeout",
+            "type": "uinteger",
+            "label": "Timeout",
+            "validate": {
+              "max": 300,
+              "min": 1
+            }
+          },
+          {
+            "name": "shareCookies",
+            "type": "boolean",
+            "label": "Share cookies with other HTTP modules",
+            "required": true
+          },
+          {
+            "name": "ca",
+            "type": "cert",
+            "label": "Self-signed certificate"
+          },
+          {
+            "name": "rejectUnauthorized",
+            "type": "boolean",
+            "label": "Reject connections that are using unverified (self-signed) certificates",
+            "required": true
+          },
+          {
+            "name": "followRedirect",
+            "type": "boolean",
+            "label": "Follow redirect",
+            "required": true
+          },
+          {
+            "name": "useQuerystring",
+            "type": "boolean",
+            "label": "Disable serialization of multiple same query string keys as arrays",
+            "required": true
+          },
+          {
+            "name": "gzip",
+            "type": "boolean",
+            "label": "Request compressed content",
+            "required": true
+          },
+          {
+            "name": "useMtls",
+            "type": "boolean",
+            "label": "Use Mutual TLS",
+            "required": true
+          },
+          {
+            "name": "contentType",
+            "type": "select",
+            "label": "Content type",
+            "validate": {
+              "enum": [
+                "text/plain",
+                "application/json",
+                "application/xml",
+                "text/xml",
+                "text/html",
+                "custom"
+              ]
+            }
+          },
+          {
+            "name": "data",
+            "type": "buffer",
+            "label": "Request content"
+          },
+          {
+            "name": "followAllRedirects",
+            "type": "boolean",
+            "label": "Follow all redirect",
+            "required": true
+          }
+        ],
+        "restore": {
+          "expect": {
+            "qs": {
+              "mode": "chose"
+            },
+            "method": {
+              "mode": "chose",
+              "label": "POST"
+            },
+            "headers": {
+              "mode": "chose"
+            },
+            "bodyType": {
+              "label": "Raw"
+            },
+            "contentType": {
+              "label": "XML (application/xml)"
+            }
+          }
+        },
+        "designer": {
+          "x": 2400,
+          "y": 1800,
+          "name": "Fetch SAGE session ID"
+        },
+        "parameters": [
+          {
+            "name": "handleErrors",
+            "type": "boolean",
+            "label": "Evaluate all states as errors (except for 2xx and 3xx )",
+            "required": true
+          },
+          {
+            "name": "useNewZLibDeCompress",
+            "type": "hidden"
+          }
+        ]
+      },
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      }
+    },
+    {
+      "id": 13,
+      "mapper": null,
+      "module": "builtin:BasicRouter",
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 15,
+              "mapper": {
+                "ca": "",
+                "qs": [],
+                "url": "{{11.Sage_URL}}",
+                "data": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n\t<control>\n\t\t<senderid>{{11.Sage_sender_id}}</senderid>\n\t\t<password>\n\t\t\t<![CDATA[{{11.Sage_Sender_pass}}]]>\n\t\t</password>\n\t\t<controlid></controlid>\n\t\t<uniqueid>false</uniqueid>\n\t\t<dtdversion>3.0</dtdversion>\n\t\t<includewhitespace>false</includewhitespace>\n\t</control>\n\t<operation>\n\t\t<authentication>\n\t\t\t<sessionid>{{12.data.response.operation[].result[].data[].api[].sessionid[]}}</sessionid>\n\t\t</authentication>\n\t\t<content>\n\t\t\t<function controlid=\"\">\n\t\t\t\t<query>\n\t\t\t\t\t<object>GLDETAIL</object>\n\t\t\t\t\t<select>\n\t\t\t\t\t\t<field>LOCATIONID</field>\n\t\t\t\t\t\t<field>LOCATIONNAME</field>\n\t\t\t\t\t\t<field>DEPARTMENTID</field>\n\t\t\t\t\t\t<field>DEPARTMENTTITLE</field>\n\t\t\t\t\t\t<field>RECORDNO</field>\n\t\t\t\t\t\t<field>ACCOUNTNO</field>\n\t\t\t\t\t\t<field>ACCOUNTTITLE</field>\n\t\t\t\t\t\t<field>ENTRY_DATE</field>\n\t\t\t\t\t\t<field>BATCH_DATE</field>\n\t\t\t\t\t\t<field>VENDORID</field>\n\t\t\t\t\t\t<field>VENDORNAME</field>\n\t\t\t\t\t\t<field>LINE_NO</field>\n\t\t\t\t\t\t<field>RECORDID</field>\n\t\t\t\t\t\t<field>AMOUNT</field>\n\t\t\t\t\t\t<field>PRDESCRIPTION</field>\n\t\t\t\t\t\t<field>DESCRIPTION</field>\n                        <field>SYMBOL</field>\n\t\t\t\t\t</select>\n\t\t\t\t\t<filter>\n\t\t\t\t\t\t<and>\n\t\t\t\t\t\t\t<greaterthanorequalto>\n\t\t\t\t\t\t\t\t<field>BATCH_DATE</field>\n\t\t\t\t\t\t\t\t<value>{{2.Report_start_date}}</value>\n\t\t\t\t\t\t\t</greaterthanorequalto>\n\t\t\t\t\t\t\t<lessthanorequalto>\n\t\t\t\t\t\t\t\t<field>BATCH_DATE</field>\n\t\t\t\t\t\t\t\t<value>{{2.Today_date}}</value>\n\t\t\t\t\t\t\t</lessthanorequalto>\n                            <equalto>\n                                 <field>BOOKID</field>\r\n                                 <value>ACCRUAL</value>\n                            </equalto>\n\t\t\t\t\t\t</and>\n\t\t\t\t\t</filter>\n                    <orderby>\n                    <order>\r\n                    <field>AUWHENCREATED</field>\r\n                    <ascending />\r\n                    </order>\n                    <order>\r\n                    <field>RECORDNO</field>\r\n                    <ascending />\r\n                    </order>\r\n                    <order>\r\n                    <field>LINE_NO</field>\r\n                    <ascending />\r\n                    </order>\r\n                    </orderby>\n\t\t\t\t\t<pagesize>1</pagesize>\n\t\t\t\t\t<offset>0</offset>\n\t\t\t\t</query>\n\t\t\t</function>\n\t\t</content>\n\t</operation>\n</request>",
+                "gzip": true,
+                "method": "post",
+                "headers": [],
+                "timeout": "",
+                "useMtls": false,
+                "authPass": "",
+                "authUser": "",
+                "bodyType": "raw",
+                "contentType": "application/xml",
+                "serializeUrl": false,
+                "shareCookies": "[REDACTED]",
+                "parseResponse": true,
+                "followRedirect": true,
+                "useQuerystring": false,
+                "followAllRedirects": false,
+                "rejectUnauthorized": true
+              },
+              "module": "http:ActionSendData",
+              "onerror": [
+                {
+                  "id": 145,
+                  "mapper": {
+                    "count": "3",
+                    "retry": true,
+                    "interval": "15"
+                  },
+                  "module": "builtin:Break",
+                  "version": 1,
+                  "metadata": {
+                    "expect": [
+                      {
+                        "name": "retry",
+                        "type": "boolean",
+                        "label": "Automatically complete execution",
+                        "required": true
+                      },
+                      {
+                        "name": "count",
+                        "type": "uinteger",
+                        "label": "Number of attempts",
+                        "required": true,
+                        "validate": {
+                          "max": 10000,
+                          "min": 1
+                        }
+                      },
+                      {
+                        "name": "interval",
+                        "type": "uinteger",
+                        "label": "Interval between attempts",
+                        "required": true,
+                        "validate": {
+                          "max": 44640,
+                          "min": 1
+                        }
+                      }
+                    ],
+                    "restore": {
+                      "expect": {
+                        "retry": {
+                          "mode": "chose"
+                        }
+                      }
+                    },
+                    "designer": {
+                      "x": 3300,
+                      "y": 1200
+                    }
+                  },
+                  "parameters": {}
+                }
+              ],
+              "version": 3,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "url",
+                    "type": "url",
+                    "label": "URL",
+                    "required": true
+                  },
+                  {
+                    "name": "serializeUrl",
+                    "type": "boolean",
+                    "label": "Serialize URL",
+                    "required": true
+                  },
+                  {
+                    "name": "method",
+                    "type": "select",
+                    "label": "Method",
+                    "required": true,
+                    "validate": {
+                      "enum": [
+                        "get",
+                        "head",
+                        "post",
+                        "put",
+                        "patch",
+                        "delete",
+                        "options"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "headers",
+                    "spec": [
+                      {
+                        "name": "name",
+                        "type": "text",
+                        "label": "Name",
+                        "required": true
+                      },
+                      {
+                        "name": "value",
+                        "type": "text",
+                        "label": "Value"
+                      }
+                    ],
+                    "type": "array",
+                    "label": "Headers"
+                  },
+                  {
+                    "name": "qs",
+                    "spec": [
+                      {
+                        "name": "name",
+                        "type": "text",
+                        "label": "Name",
+                        "required": true
+                      },
+                      {
+                        "name": "value",
+                        "type": "text",
+                        "label": "Value"
+                      }
+                    ],
+                    "type": "array",
+                    "label": "Query String"
+                  },
+                  {
+                    "name": "bodyType",
+                    "type": "select",
+                    "label": "Body type",
+                    "validate": {
+                      "enum": [
+                        "raw",
+                        "x_www_form_urlencoded",
+                        "multipart_form_data"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "parseResponse",
+                    "type": "boolean",
+                    "label": "Parse response",
+                    "required": true
+                  },
+                  {
+                    "name": "authUser",
+                    "type": "text",
+                    "label": "User name"
+                  },
+                  {
+                    "name": "authPass",
+                    "type": "password",
+                    "label": "Password"
+                  },
+                  {
+                    "name": "timeout",
+                    "type": "uinteger",
+                    "label": "Timeout",
+                    "validate": {
+                      "max": 300,
+                      "min": 1
+                    }
+                  },
+                  {
+                    "name": "shareCookies",
+                    "type": "boolean",
+                    "label": "Share cookies with other HTTP modules",
+                    "required": true
+                  },
+                  {
+                    "name": "ca",
+                    "type": "cert",
+                    "label": "Self-signed certificate"
+                  },
+                  {
+                    "name": "rejectUnauthorized",
+                    "type": "boolean",
+                    "label": "Reject connections that are using unverified (self-signed) certificates",
+                    "required": true
+                  },
+                  {
+                    "name": "followRedirect",
+                    "type": "boolean",
+                    "label": "Follow redirect",
+                    "required": true
+                  },
+                  {
+                    "name": "useQuerystring",
+                    "type": "boolean",
+                    "label": "Disable serialization of multiple same query string keys as arrays",
+                    "required": true
+                  },
+                  {
+                    "name": "gzip",
+                    "type": "boolean",
+                    "label": "Request compressed content",
+                    "required": true
+                  },
+                  {
+                    "name": "useMtls",
+                    "type": "boolean",
+                    "label": "Use Mutual TLS",
+                    "required": true
+                  },
+                  {
+                    "name": "contentType",
+                    "type": "select",
+                    "label": "Content type",
+                    "validate": {
+                      "enum": [
+                        "text/plain",
+                        "application/json",
+                        "application/xml",
+                        "text/xml",
+                        "text/html",
+                        "custom"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "data",
+                    "type": "buffer",
+                    "label": "Request content"
+                  },
+                  {
+                    "name": "followAllRedirects",
+                    "type": "boolean",
+                    "label": "Follow all redirect",
+                    "required": true
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "qs": {
+                      "mode": "chose"
+                    },
+                    "method": {
+                      "mode": "chose",
+                      "label": "POST"
+                    },
+                    "headers": {
+                      "mode": "chose"
+                    },
+                    "bodyType": {
+                      "label": "Raw"
+                    },
+                    "contentType": {
+                      "label": "XML (application/xml)"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 3000,
+                  "y": 600,
+                  "name": "Fetch GL Details"
+                },
+                "parameters": [
+                  {
+                    "name": "handleErrors",
+                    "type": "boolean",
+                    "label": "Evaluate all states as errors (except for 2xx and 3xx )",
+                    "required": true
+                  },
+                  {
+                    "name": "useNewZLibDeCompress",
+                    "type": "hidden"
+                  }
+                ]
+              },
+              "parameters": {
+                "handleErrors": true,
+                "useNewZLibDeCompress": true
+              }
+            },
+            {
+              "id": 122,
+              "mapper": null,
+              "module": "builtin:BasicRouter",
+              "routes": [
+                {
+                  "flow": [
+                    {
+                      "id": 17,
+                      "filter": {
+                        "name": "",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{15.data.response.operation[].result[].errormessage}}",
+                              "o": "notexist"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": {
+                        "scope": "roundtrip",
+                        "variables": [
+                          {
+                            "name": "Total_records_count",
+                            "value": "{{sum(15.data.response.operation[].result[].data[].`_attributes`.numremaining; 1)}}"
+                          },
+                          {
+                            "name": "offset",
+                            "value": "0"
+                          },
+                          {
+                            "name": "sage_session_id",
+                            "value": "{{12.data.response.operation[].result[].data[].api[].sessionid[]}}"
+                          }
+                        ]
+                      },
+                      "module": "util:SetVariables",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "variables",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Variable name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "any",
+                                "label": "Variable value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Variables"
+                          },
+                          {
+                            "name": "scope",
+                            "type": "select",
+                            "label": "Variable lifetime",
+                            "required": true,
+                            "validate": {
+                              "enum": [
+                                "roundtrip",
+                                "execution"
+                              ]
+                            }
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "scope": {
+                              "label": "One cycle"
+                            },
+                            "variables": {
+                              "items": [
+                                null,
+                                null,
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3600,
+                          "y": 300
+                        },
+                        "interface": [
+                          {
+                            "name": "Total_records_count",
+                            "type": "any",
+                            "label": "Total_records_count"
+                          },
+                          {
+                            "name": "offset",
+                            "type": "any",
+                            "label": "offset"
+                          },
+                          {
+                            "name": "sage_session_id",
+                            "type": "any",
+                            "label": "sage_session_id"
+                          }
+                        ]
+                      },
+                      "parameters": {}
+                    },
+                    {
+                      "id": 64,
+                      "mapper": {
+                        "step": "1",
+                        "start": "1",
+                        "repeats": "{{if(17.Total_records_count <= 2000; 1; ceil(17.Total_records_count / 2000))}}"
+                      },
+                      "module": "builtin:BasicRepeater",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "start",
+                            "type": "number",
+                            "label": "Initial value",
+                            "required": true
+                          },
+                          {
+                            "name": "repeats",
+                            "type": "number",
+                            "label": "Repeats",
+                            "required": true,
+                            "validate": {
+                              "max": 10000,
+                              "min": 0
+                            }
+                          },
+                          {
+                            "name": "step",
+                            "type": "number",
+                            "label": "Step",
+                            "required": true
+                          }
+                        ],
+                        "restore": {},
+                        "designer": {
+                          "x": 3900,
+                          "y": 300
+                        }
+                      },
+                      "parameters": {}
+                    },
+                    {
+                      "id": 20,
+                      "mapper": {
+                        "variables": [
+                          "offset"
+                        ]
+                      },
+                      "module": "util:GetVariables",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "variables",
+                            "spec": {
+                              "name": "value",
+                              "type": "text",
+                              "label": "Variable name",
+                              "required": true
+                            },
+                            "type": "array",
+                            "label": "Variables"
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "variables": {
+                              "items": [
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 4200,
+                          "y": 300
+                        },
+                        "interface": [
+                          {
+                            "name": "offset",
+                            "type": "any",
+                            "label": "offset"
+                          }
+                        ]
+                      },
+                      "parameters": {}
+                    },
+                    {
+                      "id": 18,
+                      "mapper": {
+                        "ca": "",
+                        "qs": [],
+                        "url": "{{11.Sage_URL}}",
+                        "data": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n\t<control>\n\t\t<senderid>{{11.Sage_sender_id}}</senderid>\n\t\t<password>\n\t\t\t<![CDATA[{{11.Sage_Sender_pass}}]]>\n\t\t</password>\n\t\t<controlid></controlid>\n\t\t<uniqueid>false</uniqueid>\n\t\t<dtdversion>3.0</dtdversion>\n\t\t<includewhitespace>false</includewhitespace>\n\t</control>\n\t<operation>\n\t\t<authentication>\n\t\t\t<sessionid>{{17.sage_session_id}}</sessionid>\n\t\t</authentication>\n\t\t<content>\n\t\t\t<function controlid=\"\">\n\t\t\t\t<query>\n\t\t\t\t\t<object>GLDETAIL</object>\n\t\t\t\t\t<select>\n\t\t\t\t\t\t<field>LOCATIONID</field>\n\t\t\t\t\t\t<field>LOCATIONNAME</field>\n\t\t\t\t\t\t<field>DEPARTMENTID</field>\n\t\t\t\t\t\t<field>DEPARTMENTTITLE</field>\n\t\t\t\t\t\t<field>RECORDNO</field>\n\t\t\t\t\t\t<field>ACCOUNTNO</field>\n\t\t\t\t\t\t<field>ACCOUNTTITLE</field>\n\t\t\t\t\t\t<field>ENTRY_DATE</field>\n\t\t\t\t\t\t<field>BATCH_DATE</field>\n\t\t\t\t\t\t<field>VENDORID</field>\n\t\t\t\t\t\t<field>VENDORNAME</field>\n\t\t\t\t\t\t<field>LINE_NO</field>\n\t\t\t\t\t\t<field>RECORDID</field>\n\t\t\t\t\t\t<field>AMOUNT</field>\n\t\t\t\t\t\t<field>PRDESCRIPTION</field>\n\t\t\t\t\t\t<field>DESCRIPTION</field>\n                        <field>SYMBOL</field>\n\t\t\t\t\t</select>\n\t\t\t\t\t<filter>\n\t\t\t\t\t\t<and>\n\t\t\t\t\t\t\t<greaterthanorequalto>\n\t\t\t\t\t\t\t\t<field>BATCH_DATE</field>\n\t\t\t\t\t\t\t\t<value>{{2.Report_start_date}}</value>\n\t\t\t\t\t\t\t</greaterthanorequalto>\n\t\t\t\t\t\t\t<lessthanorequalto>\n\t\t\t\t\t\t\t\t<field>BATCH_DATE</field>\n\t\t\t\t\t\t\t\t<value>{{2.Today_date}}</value>\n\t\t\t\t\t\t\t</lessthanorequalto>\n                            <equalto>\n                                 <field>BOOKID</field>\r\n                                 <value>ACCRUAL</value>\n                            </equalto>\n\t\t\t\t\t\t</and>\n\t\t\t\t\t</filter>\n                    <orderby>\n                    <order>\r\n                    <field>AUWHENCREATED</field>\r\n                    <ascending />\r\n                    </order>\n                    <order>\r\n                    <field>RECORDNO</field>\r\n                    <ascending />\r\n                    </order>\r\n                    <order>\r\n                    <field>LINE_NO</field>\r\n                    <ascending />\r\n                    </order>\r\n                    </orderby>\n                    <options>\n                    <returnformat>json</returnformat>\n                    </options>\n\t\t\t\t\t<pagesize>2000</pagesize>\n\t\t\t\t\t<offset>{{20.offset}}</offset>\n\t\t\t\t</query>\n\t\t\t</function>\n\t\t</content>\n\t</operation>\n</request>",
+                        "gzip": true,
+                        "method": "post",
+                        "headers": [],
+                        "timeout": "",
+                        "useMtls": false,
+                        "authPass": "",
+                        "authUser": "",
+                        "bodyType": "raw",
+                        "contentType": "application/xml",
+                        "serializeUrl": false,
+                        "shareCookies": "[REDACTED]",
+                        "parseResponse": true,
+                        "followRedirect": true,
+                        "useQuerystring": false,
+                        "followAllRedirects": false,
+                        "rejectUnauthorized": true
+                      },
+                      "module": "http:ActionSendData",
+                      "onerror": [
+                        {
+                          "id": 143,
+                          "mapper": {
+                            "count": "3",
+                            "retry": true,
+                            "interval": "15"
+                          },
+                          "module": "builtin:Break",
+                          "version": 1,
+                          "metadata": {
+                            "expect": [
+                              {
+                                "name": "retry",
+                                "type": "boolean",
+                                "label": "Automatically complete execution",
+                                "required": true
+                              },
+                              {
+                                "name": "count",
+                                "type": "uinteger",
+                                "label": "Number of attempts",
+                                "required": true,
+                                "validate": {
+                                  "max": 10000,
+                                  "min": 1
+                                }
+                              },
+                              {
+                                "name": "interval",
+                                "type": "uinteger",
+                                "label": "Interval between attempts",
+                                "required": true,
+                                "validate": {
+                                  "max": 44640,
+                                  "min": 1
+                                }
+                              }
+                            ],
+                            "restore": {
+                              "expect": {
+                                "retry": {
+                                  "mode": "chose"
+                                }
+                              }
+                            },
+                            "designer": {
+                              "x": 4800,
+                              "y": 600
+                            }
+                          },
+                          "parameters": {}
+                        }
+                      ],
+                      "version": 3,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "url",
+                            "type": "url",
+                            "label": "URL",
+                            "required": true
+                          },
+                          {
+                            "name": "serializeUrl",
+                            "type": "boolean",
+                            "label": "Serialize URL",
+                            "required": true
+                          },
+                          {
+                            "name": "method",
+                            "type": "select",
+                            "label": "Method",
+                            "required": true,
+                            "validate": {
+                              "enum": [
+                                "get",
+                                "head",
+                                "post",
+                                "put",
+                                "patch",
+                                "delete",
+                                "options"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "headers",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Headers"
+                          },
+                          {
+                            "name": "qs",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Query String"
+                          },
+                          {
+                            "name": "bodyType",
+                            "type": "select",
+                            "label": "Body type",
+                            "validate": {
+                              "enum": [
+                                "raw",
+                                "x_www_form_urlencoded",
+                                "multipart_form_data"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "parseResponse",
+                            "type": "boolean",
+                            "label": "Parse response",
+                            "required": true
+                          },
+                          {
+                            "name": "authUser",
+                            "type": "text",
+                            "label": "User name"
+                          },
+                          {
+                            "name": "authPass",
+                            "type": "password",
+                            "label": "Password"
+                          },
+                          {
+                            "name": "timeout",
+                            "type": "uinteger",
+                            "label": "Timeout",
+                            "validate": {
+                              "max": 300,
+                              "min": 1
+                            }
+                          },
+                          {
+                            "name": "shareCookies",
+                            "type": "boolean",
+                            "label": "Share cookies with other HTTP modules",
+                            "required": true
+                          },
+                          {
+                            "name": "ca",
+                            "type": "cert",
+                            "label": "Self-signed certificate"
+                          },
+                          {
+                            "name": "rejectUnauthorized",
+                            "type": "boolean",
+                            "label": "Reject connections that are using unverified (self-signed) certificates",
+                            "required": true
+                          },
+                          {
+                            "name": "followRedirect",
+                            "type": "boolean",
+                            "label": "Follow redirect",
+                            "required": true
+                          },
+                          {
+                            "name": "useQuerystring",
+                            "type": "boolean",
+                            "label": "Disable serialization of multiple same query string keys as arrays",
+                            "required": true
+                          },
+                          {
+                            "name": "gzip",
+                            "type": "boolean",
+                            "label": "Request compressed content",
+                            "required": true
+                          },
+                          {
+                            "name": "useMtls",
+                            "type": "boolean",
+                            "label": "Use Mutual TLS",
+                            "required": true
+                          },
+                          {
+                            "name": "contentType",
+                            "type": "select",
+                            "label": "Content type",
+                            "validate": {
+                              "enum": [
+                                "text/plain",
+                                "application/json",
+                                "application/xml",
+                                "text/xml",
+                                "text/html",
+                                "custom"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "data",
+                            "type": "buffer",
+                            "label": "Request content"
+                          },
+                          {
+                            "name": "followAllRedirects",
+                            "type": "boolean",
+                            "label": "Follow all redirect",
+                            "required": true
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "qs": {
+                              "mode": "chose"
+                            },
+                            "method": {
+                              "mode": "chose",
+                              "label": "POST"
+                            },
+                            "headers": {
+                              "mode": "chose"
+                            },
+                            "bodyType": {
+                              "label": "Raw"
+                            },
+                            "contentType": {
+                              "label": "XML (application/xml)"
+                            }
+                          }
+                        },
+                        "advanced": true,
+                        "designer": {
+                          "x": 4500,
+                          "y": 300,
+                          "name": "Fetch GL Details"
+                        },
+                        "parameters": [
+                          {
+                            "name": "handleErrors",
+                            "type": "boolean",
+                            "label": "Evaluate all states as errors (except for 2xx and 3xx )",
+                            "required": true
+                          },
+                          {
+                            "name": "useNewZLibDeCompress",
+                            "type": "hidden"
+                          }
+                        ]
+                      },
+                      "parameters": {
+                        "handleErrors": true,
+                        "useNewZLibDeCompress": true
+                      }
+                    },
+                    {
+                      "id": 140,
+                      "filter": {
+                        "name": "Checking if data exists",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{length(18.data)}}",
+                              "b": "0",
+                              "o": "number:greater"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": null,
+                      "module": "builtin:BasicRouter",
+                      "routes": [
+                        {
+                          "flow": [
+                            {
+                              "id": 81,
+                              "filter": {
+                                "name": "Response received successfully",
+                                "conditions": [
+                                  [
+                                    {
+                                      "a": "{{18.statusCode}}",
+                                      "b": "200",
+                                      "o": "number:equal"
+                                    }
+                                  ]
+                                ]
+                              },
+                              "mapper": {
+                                "object": "{{18.data}}"
+                              },
+                              "module": "json:TransformToJSON",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "object",
+                                    "type": "any",
+                                    "label": "Object"
+                                  }
+                                ],
+                                "restore": {
+                                  "parameters": {
+                                    "space": {
+                                      "label": "Empty"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 5100,
+                                  "y": 150
+                                },
+                                "parameters": [
+                                  {
+                                    "name": "space",
+                                    "type": "select",
+                                    "label": "Indentation",
+                                    "validate": {
+                                      "enum": [
+                                        "tab",
+                                        "2",
+                                        "4"
+                                      ]
+                                    }
+                                  }
+                                ]
+                              },
+                              "parameters": {
+                                "space": ""
+                              }
+                            },
+                            {
+                              "id": 21,
+                              "mapper": {
+                                "scope": "roundtrip",
+                                "variables": [
+                                  {
+                                    "name": "offset",
+                                    "value": "{{sum(20.offset; 2000)}}"
+                                  },
+                                  {
+                                    "name": "sql_data",
+                                    "value": "{{replace(81.json; \"'\"; \"''\")}}"
+                                  }
+                                ]
+                              },
+                              "module": "util:SetVariables",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "variables",
+                                    "spec": [
+                                      {
+                                        "name": "name",
+                                        "type": "text",
+                                        "label": "Variable name",
+                                        "required": true
+                                      },
+                                      {
+                                        "name": "value",
+                                        "type": "any",
+                                        "label": "Variable value"
+                                      }
+                                    ],
+                                    "type": "array",
+                                    "label": "Variables"
+                                  },
+                                  {
+                                    "name": "scope",
+                                    "type": "select",
+                                    "label": "Variable lifetime",
+                                    "required": true,
+                                    "validate": {
+                                      "enum": [
+                                        "roundtrip",
+                                        "execution"
+                                      ]
+                                    }
+                                  }
+                                ],
+                                "restore": {
+                                  "expect": {
+                                    "scope": {
+                                      "label": "One cycle"
+                                    },
+                                    "variables": {
+                                      "items": [
+                                        null,
+                                        null
+                                      ]
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 5400,
+                                  "y": 150
+                                },
+                                "interface": [
+                                  {
+                                    "name": "offset",
+                                    "type": "any",
+                                    "label": "offset"
+                                  },
+                                  {
+                                    "name": "sql_data",
+                                    "type": "any",
+                                    "label": "sql_data"
+                                  }
+                                ]
+                              },
+                              "parameters": {}
+                            },
+                            {
+                              "id": 58,
+                              "mapper": {
+                                "command": "DECLARE @json NVARCHAR(MAX) = N'{{21.sql_data}}';\r\nEXEC AddGLDetailBulk @json;"
+                              },
+                              "module": "mssql:Query",
+                              "onerror": [
+                                {
+                                  "id": 147,
+                                  "mapper": {
+                                    "count": "3",
+                                    "retry": true,
+                                    "interval": "15"
+                                  },
+                                  "module": "builtin:Break",
+                                  "version": 1,
+                                  "metadata": {
+                                    "expect": [
+                                      {
+                                        "name": "retry",
+                                        "type": "boolean",
+                                        "label": "Automatically complete execution",
+                                        "required": true
+                                      },
+                                      {
+                                        "name": "count",
+                                        "type": "uinteger",
+                                        "label": "Number of attempts",
+                                        "required": true,
+                                        "validate": {
+                                          "max": 10000,
+                                          "min": 1
+                                        }
+                                      },
+                                      {
+                                        "name": "interval",
+                                        "type": "uinteger",
+                                        "label": "Interval between attempts",
+                                        "required": true,
+                                        "validate": {
+                                          "max": 44640,
+                                          "min": 1
+                                        }
+                                      }
+                                    ],
+                                    "restore": {
+                                      "expect": {
+                                        "retry": {
+                                          "mode": "chose"
+                                        }
+                                      }
+                                    },
+                                    "designer": {
+                                      "x": 6000,
+                                      "y": 300
+                                    }
+                                  },
+                                  "parameters": {}
+                                }
+                              ],
+                              "version": 2,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "command",
+                                    "type": "text",
+                                    "label": "Query",
+                                    "required": true
+                                  }
+                                ],
+                                "restore": {
+                                  "parameters": {
+                                    "account": {
+                                      "data": {
+                                        "scoped": "true",
+                                        "connection": "mssql"
+                                      },
+                                      "label": "My Microsoft SQL Server connection"
+                                    },
+                                    "isolationLevel": {
+                                      "label": "Empty"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 5700,
+                                  "y": 150
+                                },
+                                "parameters": [
+                                  {
+                                    "name": "account",
+                                    "type": "account:mssql",
+                                    "label": "Connection",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "continueWhenNoRes",
+                                    "type": "boolean",
+                                    "label": "Continue the execution of the route even if the module returns no rows",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "isToManageDataInSharedTransaction",
+                                    "type": "boolean",
+                                    "label": "Manage data within the shared transaction",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "isolationLevel",
+                                    "type": "select",
+                                    "label": "Transaction Isolation Level",
+                                    "validate": {
+                                      "enum": [
+                                        1,
+                                        2,
+                                        3,
+                                        4,
+                                        5
+                                      ]
+                                    }
+                                  }
+                                ]
+                              },
+                              "parameters": {
+                                "account": 2803828,
+                                "isolationLevel": "",
+                                "continueWhenNoRes": true,
+                                "isToManageDataInSharedTransaction": true
+                              }
+                            },
+                            {
+                              "id": 114,
+                              "mapper": {},
+                              "module": "builtin:BasicAggregator",
+                              "version": 1,
+                              "metadata": {
+                                "restore": {
+                                  "extra": {
+                                    "feeder": {
+                                      "label": "Repeater [64]"
+                                    },
+                                    "target": {
+                                      "label": "Custom"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 6000,
+                                  "y": 0
+                                }
+                              },
+                              "parameters": {
+                                "feeder": 64
+                              }
+                            },
+                            {
+                              "id": 111,
+                              "mapper": {
+                                "key": "1",
+                                "returnWrapped": false
+                              },
+                              "module": "datastore:GetRecord",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "key",
+                                    "type": "text",
+                                    "label": "Key",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "returnWrapped",
+                                    "type": "boolean",
+                                    "label": "Return Wrapped Output",
+                                    "required": true
+                                  }
+                                ],
+                                "restore": {
+                                  "parameters": {
+                                    "datastore": {
+                                      "label": "Log_text_SQLFeeds"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 6300,
+                                  "y": 0
+                                },
+                                "interface": [
+                                  {
+                                    "help": "",
+                                    "name": "Description",
+                                    "type": "text",
+                                    "label": null,
+                                    "default": null,
+                                    "required": false,
+                                    "multiline": true
+                                  }
+                                ],
+                                "parameters": [
+                                  {
+                                    "name": "datastore",
+                                    "type": "datastore",
+                                    "label": "Data store",
+                                    "required": true
+                                  }
+                                ]
+                              },
+                              "parameters": {
+                                "datastore": 23497
+                              }
+                            },
+                            {
+                              "id": 115,
+                              "mapper": {
+                                "key": "1",
+                                "data": {
+                                  "Description": "{{111.Description}}{{17.Total_records_count}} GL  Records added to SQL for the period {{2.Report_start_date}} to {{2.Today_date}}{{newline}}"
+                                },
+                                "upsert": false,
+                                "overwriteArrays": false
+                              },
+                              "module": "datastore:UpdateRecord",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "key",
+                                    "type": "text",
+                                    "label": "Key",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "upsert",
+                                    "type": "boolean",
+                                    "label": "Insert missing record",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "overwriteArrays",
+                                    "type": "boolean",
+                                    "label": "Overwrite an existing array in the record",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "data",
+                                    "spec": [
+                                      {
+                                        "name": "Description",
+                                        "type": "text",
+                                        "label": null
+                                      }
+                                    ],
+                                    "type": "collection",
+                                    "label": "Record"
+                                  }
+                                ],
+                                "restore": {
+                                  "expect": {
+                                    "upsert": {
+                                      "mode": "chose"
+                                    },
+                                    "overwriteArrays": {
+                                      "mode": "chose"
+                                    }
+                                  },
+                                  "parameters": {
+                                    "datastore": {
+                                      "label": "Log_text_SQLFeeds"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 6600,
+                                  "y": 0
+                                },
+                                "parameters": [
+                                  {
+                                    "name": "datastore",
+                                    "type": "datastore",
+                                    "label": "Data store",
+                                    "required": true
+                                  }
+                                ]
+                              },
+                              "parameters": {
+                                "datastore": 23497
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "version": 1,
+                      "metadata": {
+                        "designer": {
+                          "x": 4800,
+                          "y": 150
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "flow": [
+                    {
+                      "id": 123,
+                      "filter": {
+                        "name": "",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{15.data.response.operation[].result[].errormessage}}",
+                              "o": "exist"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": {
+                        "key": "1",
+                        "returnWrapped": false
+                      },
+                      "module": "datastore:GetRecord",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "key",
+                            "type": "text",
+                            "label": "Key",
+                            "required": true
+                          },
+                          {
+                            "name": "returnWrapped",
+                            "type": "boolean",
+                            "label": "Return Wrapped Output",
+                            "required": true
+                          }
+                        ],
+                        "restore": {
+                          "parameters": {
+                            "datastore": {
+                              "label": "Log_text_SQLFeeds"
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3600,
+                          "y": 900
+                        },
+                        "interface": [
+                          {
+                            "help": "",
+                            "name": "Description",
+                            "type": "text",
+                            "label": null,
+                            "default": null,
+                            "required": false,
+                            "multiline": true
+                          }
+                        ],
+                        "parameters": [
+                          {
+                            "name": "datastore",
+                            "type": "datastore",
+                            "label": "Data store",
+                            "required": true
+                          }
+                        ]
+                      },
+                      "parameters": {
+                        "datastore": 23497
+                      }
+                    },
+                    {
+                      "id": 124,
+                      "mapper": {
+                        "key": "1",
+                        "data": {
+                          "Description": "{{123.Description}} Fetch GL Details error: {{15.data.response.operation[].result[].errormessage[].error[].description2[]}}{{newline}}"
+                        },
+                        "upsert": false,
+                        "overwriteArrays": false
+                      },
+                      "module": "datastore:UpdateRecord",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "key",
+                            "type": "text",
+                            "label": "Key",
+                            "required": true
+                          },
+                          {
+                            "name": "upsert",
+                            "type": "boolean",
+                            "label": "Insert missing record",
+                            "required": true
+                          },
+                          {
+                            "name": "overwriteArrays",
+                            "type": "boolean",
+                            "label": "Overwrite an existing array in the record",
+                            "required": true
+                          },
+                          {
+                            "name": "data",
+                            "spec": [
+                              {
+                                "name": "Description",
+                                "type": "text",
+                                "label": null
+                              }
+                            ],
+                            "type": "collection",
+                            "label": "Record"
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "upsert": {
+                              "mode": "chose"
+                            },
+                            "overwriteArrays": {
+                              "mode": "chose"
+                            }
+                          },
+                          "parameters": {
+                            "datastore": {
+                              "label": "Log_text_SQLFeeds"
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3900,
+                          "y": 900
+                        },
+                        "parameters": [
+                          {
+                            "name": "datastore",
+                            "type": "datastore",
+                            "label": "Data store",
+                            "required": true
+                          }
+                        ]
+                      },
+                      "parameters": {
+                        "datastore": 23497
+                      }
+                    }
+                  ]
+                }
+              ],
+              "version": 1,
+              "metadata": {
+                "designer": {
+                  "x": 3300,
+                  "y": 450
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 27,
+              "mapper": {
+                "ca": "",
+                "qs": [],
+                "url": "{{11.Sage_URL}}",
+                "data": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n\t<control>\n\t\t<senderid>{{11.Sage_sender_id}}</senderid>\n\t\t<password>\n\t\t\t<![CDATA[{{11.Sage_Sender_pass}}]]>\n\t\t</password>\n\t\t<controlid></controlid>\n\t\t<uniqueid>false</uniqueid>\n\t\t<dtdversion>3.0</dtdversion>\n\t\t<includewhitespace>false</includewhitespace>\n\t</control>\n\t<operation>\n\t\t<authentication>\n\t\t\t<sessionid>{{12.data.response.operation[].result[].data[].api[].sessionid[]}}</sessionid>\n\t\t</authentication>\n\t\t<content>\n\t\t\t<function controlid=\"\">\n\t\t\t\t<query>\n\t\t\t\t\t<object>APBILL</object>\n\t\t\t\t\t<select>\n\t\t\t\t\t\t<field>MEGAENTITYID</field>\n\t\t\t\t\t\t<field>RECORDNO</field>\n\t\t\t\t\t\t<field>RECORDID</field>\n\t\t\t\t\t\t<field>STAMPLI_LINK</field>\n\t\t\t\t\t</select>\n                    <filter>\n                    <and>\n                    <greaterthanorequalto>\n                    <field>WHENPOSTED</field>\n                    <value>{{2.Report_start_date}}</value>\n                    </greaterthanorequalto>\n                    <lessthanorequalto>\n                    <field>WHENPOSTED</field>\n                    <value>{{2.Today_date}}</value>\n                    </lessthanorequalto>\n                    </and>\n                    </filter>\n                    <orderby>\r\n                    <order>\r\n                    <field>RECORDNO</field>\r\n                    <ascending />\r\n                    </order>\r\n                    </orderby>\n                    <options>\n                    <showprivate>true</showprivate>\n                    </options>\n\t\t\t\t\t<pagesize>1</pagesize>\n\t\t\t\t\t<offset>0</offset>\n\t\t\t\t</query>\n\t\t\t</function>\n\t\t</content>\n\t</operation>\n</request>",
+                "gzip": true,
+                "method": "post",
+                "headers": [],
+                "timeout": "",
+                "useMtls": false,
+                "authPass": "",
+                "authUser": "",
+                "bodyType": "raw",
+                "contentType": "application/xml",
+                "serializeUrl": false,
+                "shareCookies": "[REDACTED]",
+                "parseResponse": true,
+                "followRedirect": true,
+                "useQuerystring": false,
+                "followAllRedirects": false,
+                "rejectUnauthorized": true
+              },
+              "module": "http:ActionSendData",
+              "onerror": [
+                {
+                  "id": 146,
+                  "mapper": {
+                    "count": "3",
+                    "retry": true,
+                    "interval": "15"
+                  },
+                  "module": "builtin:Break",
+                  "version": 1,
+                  "metadata": {
+                    "expect": [
+                      {
+                        "name": "retry",
+                        "type": "boolean",
+                        "label": "Automatically complete execution",
+                        "required": true
+                      },
+                      {
+                        "name": "count",
+                        "type": "uinteger",
+                        "label": "Number of attempts",
+                        "required": true,
+                        "validate": {
+                          "max": 10000,
+                          "min": 1
+                        }
+                      },
+                      {
+                        "name": "interval",
+                        "type": "uinteger",
+                        "label": "Interval between attempts",
+                        "required": true,
+                        "validate": {
+                          "max": 44640,
+                          "min": 1
+                        }
+                      }
+                    ],
+                    "restore": {
+                      "expect": {
+                        "retry": {
+                          "mode": "chose"
+                        }
+                      }
+                    },
+                    "designer": {
+                      "x": 3300,
+                      "y": 2700
+                    }
+                  },
+                  "parameters": {}
+                }
+              ],
+              "version": 3,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "url",
+                    "type": "url",
+                    "label": "URL",
+                    "required": true
+                  },
+                  {
+                    "name": "serializeUrl",
+                    "type": "boolean",
+                    "label": "Serialize URL",
+                    "required": true
+                  },
+                  {
+                    "name": "method",
+                    "type": "select",
+                    "label": "Method",
+                    "required": true,
+                    "validate": {
+                      "enum": [
+                        "get",
+                        "head",
+                        "post",
+                        "put",
+                        "patch",
+                        "delete",
+                        "options"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "headers",
+                    "spec": [
+                      {
+                        "name": "name",
+                        "type": "text",
+                        "label": "Name",
+                        "required": true
+                      },
+                      {
+                        "name": "value",
+                        "type": "text",
+                        "label": "Value"
+                      }
+                    ],
+                    "type": "array",
+                    "label": "Headers"
+                  },
+                  {
+                    "name": "qs",
+                    "spec": [
+                      {
+                        "name": "name",
+                        "type": "text",
+                        "label": "Name",
+                        "required": true
+                      },
+                      {
+                        "name": "value",
+                        "type": "text",
+                        "label": "Value"
+                      }
+                    ],
+                    "type": "array",
+                    "label": "Query String"
+                  },
+                  {
+                    "name": "bodyType",
+                    "type": "select",
+                    "label": "Body type",
+                    "validate": {
+                      "enum": [
+                        "raw",
+                        "x_www_form_urlencoded",
+                        "multipart_form_data"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "parseResponse",
+                    "type": "boolean",
+                    "label": "Parse response",
+                    "required": true
+                  },
+                  {
+                    "name": "authUser",
+                    "type": "text",
+                    "label": "User name"
+                  },
+                  {
+                    "name": "authPass",
+                    "type": "password",
+                    "label": "Password"
+                  },
+                  {
+                    "name": "timeout",
+                    "type": "uinteger",
+                    "label": "Timeout",
+                    "validate": {
+                      "max": 300,
+                      "min": 1
+                    }
+                  },
+                  {
+                    "name": "shareCookies",
+                    "type": "boolean",
+                    "label": "Share cookies with other HTTP modules",
+                    "required": true
+                  },
+                  {
+                    "name": "ca",
+                    "type": "cert",
+                    "label": "Self-signed certificate"
+                  },
+                  {
+                    "name": "rejectUnauthorized",
+                    "type": "boolean",
+                    "label": "Reject connections that are using unverified (self-signed) certificates",
+                    "required": true
+                  },
+                  {
+                    "name": "followRedirect",
+                    "type": "boolean",
+                    "label": "Follow redirect",
+                    "required": true
+                  },
+                  {
+                    "name": "useQuerystring",
+                    "type": "boolean",
+                    "label": "Disable serialization of multiple same query string keys as arrays",
+                    "required": true
+                  },
+                  {
+                    "name": "gzip",
+                    "type": "boolean",
+                    "label": "Request compressed content",
+                    "required": true
+                  },
+                  {
+                    "name": "useMtls",
+                    "type": "boolean",
+                    "label": "Use Mutual TLS",
+                    "required": true
+                  },
+                  {
+                    "name": "contentType",
+                    "type": "select",
+                    "label": "Content type",
+                    "validate": {
+                      "enum": [
+                        "text/plain",
+                        "application/json",
+                        "application/xml",
+                        "text/xml",
+                        "text/html",
+                        "custom"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "data",
+                    "type": "buffer",
+                    "label": "Request content"
+                  },
+                  {
+                    "name": "followAllRedirects",
+                    "type": "boolean",
+                    "label": "Follow all redirect",
+                    "required": true
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "qs": {
+                      "mode": "chose"
+                    },
+                    "method": {
+                      "mode": "chose",
+                      "label": "POST"
+                    },
+                    "headers": {
+                      "mode": "chose"
+                    },
+                    "bodyType": {
+                      "label": "Raw"
+                    },
+                    "contentType": {
+                      "label": "XML (application/xml)"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 3000,
+                  "y": 2100,
+                  "name": "Fetch AP Bill Detail"
+                },
+                "parameters": [
+                  {
+                    "name": "handleErrors",
+                    "type": "boolean",
+                    "label": "Evaluate all states as errors (except for 2xx and 3xx )",
+                    "required": true
+                  },
+                  {
+                    "name": "useNewZLibDeCompress",
+                    "type": "hidden"
+                  }
+                ]
+              },
+              "parameters": {
+                "handleErrors": true,
+                "useNewZLibDeCompress": true
+              }
+            },
+            {
+              "id": 125,
+              "mapper": null,
+              "module": "builtin:BasicRouter",
+              "routes": [
+                {
+                  "flow": [
+                    {
+                      "id": 28,
+                      "filter": {
+                        "name": "",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{27.data.response.operation[].result[].errormessage}}",
+                              "o": "notexist"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": {
+                        "scope": "roundtrip",
+                        "variables": [
+                          {
+                            "name": "Total_records_count",
+                            "value": "{{27.data.response.operation[].result[].data[].`_attributes`.totalcount}}"
+                          },
+                          {
+                            "name": "offset",
+                            "value": "0"
+                          },
+                          {
+                            "name": "sage_session_id",
+                            "value": "{{12.data.response.operation[].result[].data[].api[].sessionid[]}}"
+                          }
+                        ]
+                      },
+                      "module": "util:SetVariables",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "variables",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Variable name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "any",
+                                "label": "Variable value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Variables"
+                          },
+                          {
+                            "name": "scope",
+                            "type": "select",
+                            "label": "Variable lifetime",
+                            "required": true,
+                            "validate": {
+                              "enum": [
+                                "roundtrip",
+                                "execution"
+                              ]
+                            }
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "scope": {
+                              "label": "One cycle"
+                            },
+                            "variables": {
+                              "items": [
+                                null,
+                                null,
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3600,
+                          "y": 1800
+                        },
+                        "interface": [
+                          {
+                            "name": "Total_records_count",
+                            "type": "any",
+                            "label": "Total_records_count"
+                          },
+                          {
+                            "name": "offset",
+                            "type": "any",
+                            "label": "offset"
+                          },
+                          {
+                            "name": "sage_session_id",
+                            "type": "any",
+                            "label": "sage_session_id"
+                          }
+                        ]
+                      },
+                      "parameters": {}
+                    },
+                    {
+                      "id": 29,
+                      "mapper": {
+                        "step": "1",
+                        "start": "1",
+                        "repeats": "{{if(28.Total_records_count <= 2000; 1; ceil(28.Total_records_count / 2000))}}"
+                      },
+                      "module": "builtin:BasicRepeater",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "start",
+                            "type": "number",
+                            "label": "Initial value",
+                            "required": true
+                          },
+                          {
+                            "name": "repeats",
+                            "type": "number",
+                            "label": "Repeats",
+                            "required": true,
+                            "validate": {
+                              "max": 10000,
+                              "min": 0
+                            }
+                          },
+                          {
+                            "name": "step",
+                            "type": "number",
+                            "label": "Step",
+                            "required": true
+                          }
+                        ],
+                        "restore": {},
+                        "designer": {
+                          "x": 3900,
+                          "y": 1800
+                        }
+                      },
+                      "parameters": {}
+                    },
+                    {
+                      "id": 30,
+                      "mapper": {
+                        "variables": [
+                          "offset"
+                        ]
+                      },
+                      "module": "util:GetVariables",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "variables",
+                            "spec": {
+                              "name": "value",
+                              "type": "text",
+                              "label": "Variable name",
+                              "required": true
+                            },
+                            "type": "array",
+                            "label": "Variables"
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "variables": {
+                              "items": [
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 4200,
+                          "y": 1800
+                        },
+                        "interface": [
+                          {
+                            "name": "offset",
+                            "type": "any",
+                            "label": "offset"
+                          }
+                        ]
+                      },
+                      "parameters": {}
+                    },
+                    {
+                      "id": 31,
+                      "mapper": {
+                        "ca": "",
+                        "qs": [],
+                        "url": "{{11.Sage_URL}}",
+                        "data": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<request>\n\t<control>\n\t\t<senderid>{{11.Sage_sender_id}}</senderid>\n\t\t<password>\n\t\t\t<![CDATA[{{11.Sage_Sender_pass}}]]>\n\t\t</password>\n\t\t<controlid></controlid>\n\t\t<uniqueid>false</uniqueid>\n\t\t<dtdversion>3.0</dtdversion>\n\t\t<includewhitespace>false</includewhitespace>\n\t</control>\n\t<operation>\n\t\t<authentication>\n\t\t\t<sessionid>{{28.sage_session_id}}</sessionid>\n\t\t</authentication>\n\t\t<content>\n\t\t\t<function controlid=\"\">\n\t\t\t\t<query>\n\t\t\t\t\t<object>APBILL</object>\n\t\t\t\t\t<select>\n\t\t\t\t\t\t<field>MEGAENTITYID</field>\n\t\t\t\t\t\t<field>RECORDNO</field>\n\t\t\t\t\t\t<field>RECORDID</field>\n                        <field>VENDORID</field>\r\n                        <field>VENDORNAME</field>\n\t\t\t\t\t\t<field>STAMPLI_LINK</field>\n                        <field>PLATFORM_SERVICES_LINK</field>\n\t\t\t\t\t</select>\n\t\t\t\t\t<filter>\n\t\t\t\t\t\t<and>\n\t\t\t\t\t\t\t<greaterthanorequalto>\n\t\t\t\t\t\t\t\t<field>WHENPOSTED</field>\n\t\t\t\t\t\t\t\t<value>{{2.Report_start_date}}</value>\n\t\t\t\t\t\t\t</greaterthanorequalto>\n\t\t\t\t\t\t\t<lessthanorequalto>\n\t\t\t\t\t\t\t\t<field>WHENPOSTED</field>\n\t\t\t\t\t\t\t\t<value>{{2.Today_date}}</value>\n\t\t\t\t\t\t\t</lessthanorequalto>\n\t\t\t\t\t\t</and>\n\t\t\t\t\t</filter>\n                    <orderby>\r\n                    <order>\r\n                    <field>RECORDNO</field>\r\n                    <ascending />\r\n                    </order>\r\n                    </orderby>\n                    <options>\n                     <showprivate>true</showprivate>\n                    <returnformat>json</returnformat>\n                    </options>\n\t\t\t\t\t<pagesize>2000</pagesize>\n\t\t\t\t\t<offset>{{30.offset}}</offset>\n\t\t\t\t</query>\n\t\t\t</function>\n\t\t</content>\n\t</operation>\n</request>",
+                        "gzip": true,
+                        "method": "post",
+                        "headers": [],
+                        "timeout": "",
+                        "useMtls": false,
+                        "authPass": "",
+                        "authUser": "",
+                        "bodyType": "raw",
+                        "contentType": "application/xml",
+                        "serializeUrl": false,
+                        "shareCookies": "[REDACTED]",
+                        "parseResponse": true,
+                        "followRedirect": true,
+                        "useQuerystring": false,
+                        "followAllRedirects": false,
+                        "rejectUnauthorized": true
+                      },
+                      "module": "http:ActionSendData",
+                      "onerror": [
+                        {
+                          "id": 144,
+                          "mapper": {
+                            "count": "3",
+                            "retry": true,
+                            "interval": "15"
+                          },
+                          "module": "builtin:Break",
+                          "version": 1,
+                          "metadata": {
+                            "expect": [
+                              {
+                                "name": "retry",
+                                "type": "boolean",
+                                "label": "Automatically complete execution",
+                                "required": true
+                              },
+                              {
+                                "name": "count",
+                                "type": "uinteger",
+                                "label": "Number of attempts",
+                                "required": true,
+                                "validate": {
+                                  "max": 10000,
+                                  "min": 1
+                                }
+                              },
+                              {
+                                "name": "interval",
+                                "type": "uinteger",
+                                "label": "Interval between attempts",
+                                "required": true,
+                                "validate": {
+                                  "max": 44640,
+                                  "min": 1
+                                }
+                              }
+                            ],
+                            "restore": {
+                              "expect": {
+                                "retry": {
+                                  "mode": "chose"
+                                }
+                              }
+                            },
+                            "designer": {
+                              "x": 4800,
+                              "y": 2100
+                            }
+                          },
+                          "parameters": {}
+                        }
+                      ],
+                      "version": 3,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "url",
+                            "type": "url",
+                            "label": "URL",
+                            "required": true
+                          },
+                          {
+                            "name": "serializeUrl",
+                            "type": "boolean",
+                            "label": "Serialize URL",
+                            "required": true
+                          },
+                          {
+                            "name": "method",
+                            "type": "select",
+                            "label": "Method",
+                            "required": true,
+                            "validate": {
+                              "enum": [
+                                "get",
+                                "head",
+                                "post",
+                                "put",
+                                "patch",
+                                "delete",
+                                "options"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "headers",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Headers"
+                          },
+                          {
+                            "name": "qs",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Query String"
+                          },
+                          {
+                            "name": "bodyType",
+                            "type": "select",
+                            "label": "Body type",
+                            "validate": {
+                              "enum": [
+                                "raw",
+                                "x_www_form_urlencoded",
+                                "multipart_form_data"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "parseResponse",
+                            "type": "boolean",
+                            "label": "Parse response",
+                            "required": true
+                          },
+                          {
+                            "name": "authUser",
+                            "type": "text",
+                            "label": "User name"
+                          },
+                          {
+                            "name": "authPass",
+                            "type": "password",
+                            "label": "Password"
+                          },
+                          {
+                            "name": "timeout",
+                            "type": "uinteger",
+                            "label": "Timeout",
+                            "validate": {
+                              "max": 300,
+                              "min": 1
+                            }
+                          },
+                          {
+                            "name": "shareCookies",
+                            "type": "boolean",
+                            "label": "Share cookies with other HTTP modules",
+                            "required": true
+                          },
+                          {
+                            "name": "ca",
+                            "type": "cert",
+                            "label": "Self-signed certificate"
+                          },
+                          {
+                            "name": "rejectUnauthorized",
+                            "type": "boolean",
+                            "label": "Reject connections that are using unverified (self-signed) certificates",
+                            "required": true
+                          },
+                          {
+                            "name": "followRedirect",
+                            "type": "boolean",
+                            "label": "Follow redirect",
+                            "required": true
+                          },
+                          {
+                            "name": "useQuerystring",
+                            "type": "boolean",
+                            "label": "Disable serialization of multiple same query string keys as arrays",
+                            "required": true
+                          },
+                          {
+                            "name": "gzip",
+                            "type": "boolean",
+                            "label": "Request compressed content",
+                            "required": true
+                          },
+                          {
+                            "name": "useMtls",
+                            "type": "boolean",
+                            "label": "Use Mutual TLS",
+                            "required": true
+                          },
+                          {
+                            "name": "contentType",
+                            "type": "select",
+                            "label": "Content type",
+                            "validate": {
+                              "enum": [
+                                "text/plain",
+                                "application/json",
+                                "application/xml",
+                                "text/xml",
+                                "text/html",
+                                "custom"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "data",
+                            "type": "buffer",
+                            "label": "Request content"
+                          },
+                          {
+                            "name": "followAllRedirects",
+                            "type": "boolean",
+                            "label": "Follow all redirect",
+                            "required": true
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "qs": {
+                              "mode": "chose"
+                            },
+                            "method": {
+                              "mode": "chose",
+                              "label": "POST"
+                            },
+                            "headers": {
+                              "mode": "chose",
+                              "collapsed": true
+                            },
+                            "bodyType": {
+                              "label": "Raw"
+                            },
+                            "contentType": {
+                              "label": "XML (application/xml)"
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 4500,
+                          "y": 1800,
+                          "name": "Fetch AP Bill Detail"
+                        },
+                        "parameters": [
+                          {
+                            "name": "handleErrors",
+                            "type": "boolean",
+                            "label": "Evaluate all states as errors (except for 2xx and 3xx )",
+                            "required": true
+                          },
+                          {
+                            "name": "useNewZLibDeCompress",
+                            "type": "hidden"
+                          }
+                        ]
+                      },
+                      "parameters": {
+                        "handleErrors": true,
+                        "useNewZLibDeCompress": true
+                      }
+                    },
+                    {
+                      "id": 141,
+                      "filter": {
+                        "name": "Check if data exists",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{length(31.data)}}",
+                              "b": "0",
+                              "o": "number:greater"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": null,
+                      "module": "builtin:BasicRouter",
+                      "routes": [
+                        {
+                          "flow": [
+                            {
+                              "id": 129,
+                              "filter": {
+                                "name": "Response received successfully",
+                                "conditions": [
+                                  [
+                                    {
+                                      "a": "{{31.statusCode}}",
+                                      "b": "200",
+                                      "o": "number:equal"
+                                    }
+                                  ]
+                                ]
+                              },
+                              "mapper": {
+                                "object": "{{31.data}}"
+                              },
+                              "module": "json:TransformToJSON",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "object",
+                                    "type": "any",
+                                    "label": "Object"
+                                  }
+                                ],
+                                "restore": {
+                                  "parameters": {
+                                    "space": {
+                                      "label": "Empty"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 5100,
+                                  "y": 1650
+                                },
+                                "parameters": [
+                                  {
+                                    "name": "space",
+                                    "type": "select",
+                                    "label": "Indentation",
+                                    "validate": {
+                                      "enum": [
+                                        "tab",
+                                        "2",
+                                        "4"
+                                      ]
+                                    }
+                                  }
+                                ]
+                              },
+                              "parameters": {
+                                "space": ""
+                              }
+                            },
+                            {
+                              "id": 32,
+                              "mapper": {
+                                "scope": "roundtrip",
+                                "variables": [
+                                  {
+                                    "name": "offset",
+                                    "value": "{{sum(30.offset; 2000)}}"
+                                  },
+                                  {
+                                    "name": "sql_data",
+                                    "value": "{{replace(129.json; \"'\"; \"''\")}}"
+                                  }
+                                ]
+                              },
+                              "module": "util:SetVariables",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "variables",
+                                    "spec": [
+                                      {
+                                        "name": "name",
+                                        "type": "text",
+                                        "label": "Variable name",
+                                        "required": true
+                                      },
+                                      {
+                                        "name": "value",
+                                        "type": "any",
+                                        "label": "Variable value"
+                                      }
+                                    ],
+                                    "type": "array",
+                                    "label": "Variables"
+                                  },
+                                  {
+                                    "name": "scope",
+                                    "type": "select",
+                                    "label": "Variable lifetime",
+                                    "required": true,
+                                    "validate": {
+                                      "enum": [
+                                        "roundtrip",
+                                        "execution"
+                                      ]
+                                    }
+                                  }
+                                ],
+                                "restore": {
+                                  "expect": {
+                                    "scope": {
+                                      "label": "One cycle"
+                                    },
+                                    "variables": {
+                                      "items": [
+                                        null,
+                                        null
+                                      ]
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 5400,
+                                  "y": 1650
+                                },
+                                "interface": [
+                                  {
+                                    "name": "offset",
+                                    "type": "any",
+                                    "label": "offset"
+                                  },
+                                  {
+                                    "name": "sql_data",
+                                    "type": "any",
+                                    "label": "sql_data"
+                                  }
+                                ]
+                              },
+                              "parameters": {}
+                            },
+                            {
+                              "id": 56,
+                              "mapper": {
+                                "command": "DECLARE @json NVARCHAR(MAX) = '{{32.sql_data}}';\nEXEC AddAPBillBulk @json;"
+                              },
+                              "module": "mssql:Query",
+                              "onerror": [
+                                {
+                                  "id": 148,
+                                  "mapper": {
+                                    "count": "3",
+                                    "retry": true,
+                                    "interval": "15"
+                                  },
+                                  "module": "builtin:Break",
+                                  "version": 1,
+                                  "metadata": {
+                                    "expect": [
+                                      {
+                                        "name": "retry",
+                                        "type": "boolean",
+                                        "label": "Automatically complete execution",
+                                        "required": true
+                                      },
+                                      {
+                                        "name": "count",
+                                        "type": "uinteger",
+                                        "label": "Number of attempts",
+                                        "required": true,
+                                        "validate": {
+                                          "max": 10000,
+                                          "min": 1
+                                        }
+                                      },
+                                      {
+                                        "name": "interval",
+                                        "type": "uinteger",
+                                        "label": "Interval between attempts",
+                                        "required": true,
+                                        "validate": {
+                                          "max": 44640,
+                                          "min": 1
+                                        }
+                                      }
+                                    ],
+                                    "restore": {
+                                      "expect": {
+                                        "retry": {
+                                          "mode": "chose"
+                                        }
+                                      }
+                                    },
+                                    "designer": {
+                                      "x": 6000,
+                                      "y": 1800
+                                    }
+                                  },
+                                  "parameters": {}
+                                }
+                              ],
+                              "version": 2,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "command",
+                                    "type": "text",
+                                    "label": "Query",
+                                    "required": true
+                                  }
+                                ],
+                                "restore": {
+                                  "parameters": {
+                                    "account": {
+                                      "data": {
+                                        "scoped": "true",
+                                        "connection": "mssql"
+                                      },
+                                      "label": "My Microsoft SQL Server connection"
+                                    },
+                                    "isolationLevel": {
+                                      "label": "Empty"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 5700,
+                                  "y": 1650
+                                },
+                                "parameters": [
+                                  {
+                                    "name": "account",
+                                    "type": "account:mssql",
+                                    "label": "Connection",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "continueWhenNoRes",
+                                    "type": "boolean",
+                                    "label": "Continue the execution of the route even if the module returns no rows",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "isToManageDataInSharedTransaction",
+                                    "type": "boolean",
+                                    "label": "Manage data within the shared transaction",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "isolationLevel",
+                                    "type": "select",
+                                    "label": "Transaction Isolation Level",
+                                    "validate": {
+                                      "enum": [
+                                        1,
+                                        2,
+                                        3,
+                                        4,
+                                        5
+                                      ]
+                                    }
+                                  }
+                                ]
+                              },
+                              "parameters": {
+                                "account": 2803828,
+                                "isolationLevel": "",
+                                "continueWhenNoRes": true,
+                                "isToManageDataInSharedTransaction": true
+                              }
+                            },
+                            {
+                              "id": 113,
+                              "mapper": {},
+                              "module": "builtin:BasicAggregator",
+                              "version": 1,
+                              "metadata": {
+                                "restore": {
+                                  "extra": {
+                                    "feeder": {
+                                      "label": "Repeater [29]"
+                                    },
+                                    "target": {
+                                      "label": "Custom"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 6000,
+                                  "y": 1500
+                                }
+                              },
+                              "parameters": {
+                                "feeder": 29
+                              }
+                            },
+                            {
+                              "id": 112,
+                              "mapper": {
+                                "key": "1",
+                                "returnWrapped": false
+                              },
+                              "module": "datastore:GetRecord",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "key",
+                                    "type": "text",
+                                    "label": "Key",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "returnWrapped",
+                                    "type": "boolean",
+                                    "label": "Return Wrapped Output",
+                                    "required": true
+                                  }
+                                ],
+                                "restore": {
+                                  "parameters": {
+                                    "datastore": {
+                                      "label": "Log_text_SQLFeeds"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 6300,
+                                  "y": 1500
+                                },
+                                "interface": [
+                                  {
+                                    "help": "",
+                                    "name": "Description",
+                                    "type": "text",
+                                    "label": null,
+                                    "default": null,
+                                    "required": false,
+                                    "multiline": true
+                                  }
+                                ],
+                                "parameters": [
+                                  {
+                                    "name": "datastore",
+                                    "type": "datastore",
+                                    "label": "Data store",
+                                    "required": true
+                                  }
+                                ]
+                              },
+                              "parameters": {
+                                "datastore": 23497
+                              }
+                            },
+                            {
+                              "id": 116,
+                              "mapper": {
+                                "key": "1",
+                                "data": {
+                                  "Description": "{{112.Description}} Fetched {{28.Total_records_count}} APBill records for the period {{2.Report_start_date}} to {{2.Today_date}}{{newline}}"
+                                },
+                                "upsert": false,
+                                "overwriteArrays": false
+                              },
+                              "module": "datastore:UpdateRecord",
+                              "version": 1,
+                              "metadata": {
+                                "expect": [
+                                  {
+                                    "name": "key",
+                                    "type": "text",
+                                    "label": "Key",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "upsert",
+                                    "type": "boolean",
+                                    "label": "Insert missing record",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "overwriteArrays",
+                                    "type": "boolean",
+                                    "label": "Overwrite an existing array in the record",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "data",
+                                    "spec": [
+                                      {
+                                        "name": "Description",
+                                        "type": "text",
+                                        "label": null
+                                      }
+                                    ],
+                                    "type": "collection",
+                                    "label": "Record"
+                                  }
+                                ],
+                                "restore": {
+                                  "expect": {
+                                    "upsert": {
+                                      "mode": "chose"
+                                    },
+                                    "overwriteArrays": {
+                                      "mode": "chose"
+                                    }
+                                  },
+                                  "parameters": {
+                                    "datastore": {
+                                      "label": "Log_text_SQLFeeds"
+                                    }
+                                  }
+                                },
+                                "designer": {
+                                  "x": 6600,
+                                  "y": 1500
+                                },
+                                "parameters": [
+                                  {
+                                    "name": "datastore",
+                                    "type": "datastore",
+                                    "label": "Data store",
+                                    "required": true
+                                  }
+                                ]
+                              },
+                              "parameters": {
+                                "datastore": 23497
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "version": 1,
+                      "metadata": {
+                        "designer": {
+                          "x": 4800,
+                          "y": 1650
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "flow": [
+                    {
+                      "id": 126,
+                      "filter": {
+                        "name": "",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{27.data.response.operation[].result[].errormessage}}",
+                              "o": "exist"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": {
+                        "key": "1",
+                        "returnWrapped": false
+                      },
+                      "module": "datastore:GetRecord",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "key",
+                            "type": "text",
+                            "label": "Key",
+                            "required": true
+                          },
+                          {
+                            "name": "returnWrapped",
+                            "type": "boolean",
+                            "label": "Return Wrapped Output",
+                            "required": true
+                          }
+                        ],
+                        "restore": {
+                          "parameters": {
+                            "datastore": {
+                              "label": "Log_text_SQLFeeds"
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3600,
+                          "y": 2400
+                        },
+                        "interface": [
+                          {
+                            "help": "",
+                            "name": "Description",
+                            "type": "text",
+                            "label": null,
+                            "default": null,
+                            "required": false,
+                            "multiline": true
+                          }
+                        ],
+                        "parameters": [
+                          {
+                            "name": "datastore",
+                            "type": "datastore",
+                            "label": "Data store",
+                            "required": true
+                          }
+                        ]
+                      },
+                      "parameters": {
+                        "datastore": 23497
+                      }
+                    },
+                    {
+                      "id": 127,
+                      "mapper": {
+                        "key": "1",
+                        "data": {
+                          "Description": "{{126.Description}} Fetch APBill Details error: {{27.data.response.operation[].result[].errormessage[].error[].description2[]}}{{newline}}"
+                        },
+                        "upsert": false,
+                        "overwriteArrays": false
+                      },
+                      "module": "datastore:UpdateRecord",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "key",
+                            "type": "text",
+                            "label": "Key",
+                            "required": true
+                          },
+                          {
+                            "name": "upsert",
+                            "type": "boolean",
+                            "label": "Insert missing record",
+                            "required": true
+                          },
+                          {
+                            "name": "overwriteArrays",
+                            "type": "boolean",
+                            "label": "Overwrite an existing array in the record",
+                            "required": true
+                          },
+                          {
+                            "name": "data",
+                            "spec": [
+                              {
+                                "name": "Description",
+                                "type": "text",
+                                "label": null
+                              }
+                            ],
+                            "type": "collection",
+                            "label": "Record"
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "upsert": {
+                              "mode": "chose"
+                            },
+                            "overwriteArrays": {
+                              "mode": "chose"
+                            }
+                          },
+                          "parameters": {
+                            "datastore": {
+                              "label": "Log_text_SQLFeeds"
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3900,
+                          "y": 2400
+                        },
+                        "parameters": [
+                          {
+                            "name": "datastore",
+                            "type": "datastore",
+                            "label": "Data store",
+                            "required": true
+                          }
+                        ]
+                      },
+                      "parameters": {
+                        "datastore": 23497
+                      }
+                    }
+                  ]
+                }
+              ],
+              "version": 1,
+              "metadata": {
+                "designer": {
+                  "x": 3300,
+                  "y": 1950
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 71,
+              "mapper": {
+                "duration": "3"
+              },
+              "module": "util:FunctionSleep",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "duration",
+                    "type": "uinteger",
+                    "label": "Delay",
+                    "required": true,
+                    "validate": {
+                      "max": 300,
+                      "min": 1
+                    }
+                  }
+                ],
+                "restore": {},
+                "designer": {
+                  "x": 3000,
+                  "y": 3150
+                }
+              },
+              "parameters": {}
+            },
+            {
+              "id": 70,
+              "mapper": {
+                "@02:in:date:EndDate": "{{158.Report_end_date}}",
+                "@01:in:date:StartDate": "{{158.Report_start_date}}"
+              },
+              "module": "mssql:StoredProcedure",
+              "onerror": [
+                {
+                  "id": 149,
+                  "mapper": {
+                    "count": "3",
+                    "retry": true,
+                    "interval": "15"
+                  },
+                  "module": "builtin:Break",
+                  "version": 1,
+                  "metadata": {
+                    "expect": [
+                      {
+                        "name": "retry",
+                        "type": "boolean",
+                        "label": "Automatically complete execution",
+                        "required": true
+                      },
+                      {
+                        "name": "count",
+                        "type": "uinteger",
+                        "label": "Number of attempts",
+                        "required": true,
+                        "validate": {
+                          "max": 10000,
+                          "min": 1
+                        }
+                      },
+                      {
+                        "name": "interval",
+                        "type": "uinteger",
+                        "label": "Interval between attempts",
+                        "required": true,
+                        "validate": {
+                          "max": 44640,
+                          "min": 1
+                        }
+                      }
+                    ],
+                    "restore": {
+                      "expect": {
+                        "retry": {
+                          "mode": "chose"
+                        }
+                      }
+                    },
+                    "designer": {
+                      "x": 3600,
+                      "y": 3300
+                    }
+                  },
+                  "parameters": {}
+                }
+              ],
+              "version": 2,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "@01:in:date:StartDate",
+                    "type": "date",
+                    "label": "@StartDate"
+                  },
+                  {
+                    "name": "@02:in:date:EndDate",
+                    "type": "date",
+                    "label": "@EndDate"
+                  }
+                ],
+                "restore": {
+                  "parameters": {
+                    "spname": {
+                      "label": "dbo.SyncAPLinksToGL"
+                    },
+                    "account": {
+                      "data": {
+                        "scoped": "true",
+                        "connection": "mssql"
+                      },
+                      "label": "My Microsoft SQL Server connection"
+                    },
+                    "isolationLevel": {
+                      "label": "Empty"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 3300,
+                  "y": 3150
+                },
+                "interface": [
+                  {
+                    "name": "RETURN",
+                    "type": "integer",
+                    "label": "Return"
+                  },
+                  {
+                    "name": "output",
+                    "spec": [],
+                    "type": "collection",
+                    "label": "Output"
+                  },
+                  {
+                    "name": "recordset",
+                    "spec": [],
+                    "type": "array",
+                    "label": "Recordset"
+                  }
+                ],
+                "parameters": [
+                  {
+                    "name": "account",
+                    "type": "account:mssql",
+                    "label": "Connection",
+                    "required": true
+                  },
+                  {
+                    "name": "isToManageDataInSharedTransaction",
+                    "type": "boolean",
+                    "label": "Manage data within the shared transaction",
+                    "required": true
+                  },
+                  {
+                    "name": "isolationLevel",
+                    "type": "select",
+                    "label": "Transaction Isolation Level",
+                    "validate": {
+                      "enum": [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                      ]
+                    }
+                  },
+                  {
+                    "name": "spname",
+                    "type": "select",
+                    "label": "Stored procedure",
+                    "required": true
+                  }
+                ]
+              },
+              "parameters": {
+                "spname": "[Intacct].[dbo].[SyncAPLinksToGL]",
+                "account": 2803828,
+                "isolationLevel": "",
+                "isToManageDataInSharedTransaction": true
+              }
+            },
+            {
+              "id": 159,
+              "mapper": {
+                "@02:in:date:EndDate": "{{158.Report_end_date}}",
+                "@01:in:date:StartDate": "{{158.Report_start_date}}"
+              },
+              "module": "mssql:StoredProcedure",
+              "version": 2,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "@01:in:date:StartDate",
+                    "type": "date",
+                    "label": "@StartDate"
+                  },
+                  {
+                    "name": "@02:in:date:EndDate",
+                    "type": "date",
+                    "label": "@EndDate"
+                  }
+                ],
+                "restore": {
+                  "parameters": {
+                    "spname": {
+                      "label": "dbo.UpdateVendorInfoInGL"
+                    },
+                    "account": {
+                      "data": {
+                        "scoped": "true",
+                        "connection": "mssql"
+                      },
+                      "label": "My Microsoft SQL Server connection"
+                    },
+                    "isolationLevel": {
+                      "label": "Empty"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 3600,
+                  "y": 3000
+                },
+                "interface": [
+                  {
+                    "name": "RETURN",
+                    "type": "integer",
+                    "label": "Return"
+                  },
+                  {
+                    "name": "output",
+                    "spec": [],
+                    "type": "collection",
+                    "label": "Output"
+                  },
+                  {
+                    "name": "recordset",
+                    "spec": [],
+                    "type": "array",
+                    "label": "Recordset"
+                  }
+                ],
+                "parameters": [
+                  {
+                    "name": "account",
+                    "type": "account:mssql",
+                    "label": "Connection",
+                    "required": true
+                  },
+                  {
+                    "name": "isToManageDataInSharedTransaction",
+                    "type": "boolean",
+                    "label": "Manage data within the shared transaction",
+                    "required": true
+                  },
+                  {
+                    "name": "isolationLevel",
+                    "type": "select",
+                    "label": "Transaction Isolation Level",
+                    "validate": {
+                      "enum": [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                      ]
+                    }
+                  },
+                  {
+                    "name": "spname",
+                    "type": "select",
+                    "label": "Stored procedure",
+                    "required": true
+                  }
+                ]
+              },
+              "parameters": {
+                "spname": "[Intacct].[dbo].[UpdateVendorInfoInGL]",
+                "account": 2803828,
+                "isolationLevel": "",
+                "isToManageDataInSharedTransaction": true
+              }
+            },
+            {
+              "id": 133,
+              "mapper": {
+                "key": "1",
+                "returnWrapped": false
+              },
+              "module": "datastore:GetRecord",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "key",
+                    "type": "text",
+                    "label": "Key",
+                    "required": true
+                  },
+                  {
+                    "name": "returnWrapped",
+                    "type": "boolean",
+                    "label": "Return Wrapped Output",
+                    "required": true
+                  }
+                ],
+                "restore": {
+                  "parameters": {
+                    "datastore": {
+                      "label": "Log_text_SQLFeeds"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 3900,
+                  "y": 3000
+                },
+                "interface": [
+                  {
+                    "help": "",
+                    "name": "Description",
+                    "type": "text",
+                    "label": null,
+                    "default": null,
+                    "required": false,
+                    "multiline": true
+                  }
+                ],
+                "parameters": [
+                  {
+                    "name": "datastore",
+                    "type": "datastore",
+                    "label": "Data store",
+                    "required": true
+                  }
+                ]
+              },
+              "parameters": {
+                "datastore": 23497
+              }
+            },
+            {
+              "id": 134,
+              "mapper": {
+                "key": "1",
+                "data": {
+                  "Description": "{{133.Description}} Updated Vendor, Stampli links and PS links against the GL records in SQL{{newline}}Processing for \"{{1.values.`0`}}\" complete{{newline}}"
+                },
+                "upsert": false,
+                "overwriteArrays": false
+              },
+              "module": "datastore:UpdateRecord",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "key",
+                    "type": "text",
+                    "label": "Key",
+                    "required": true
+                  },
+                  {
+                    "name": "upsert",
+                    "type": "boolean",
+                    "label": "Insert missing record",
+                    "required": true
+                  },
+                  {
+                    "name": "overwriteArrays",
+                    "type": "boolean",
+                    "label": "Overwrite an existing array in the record",
+                    "required": true
+                  },
+                  {
+                    "name": "data",
+                    "spec": [
+                      {
+                        "name": "Description",
+                        "type": "text",
+                        "label": null
+                      }
+                    ],
+                    "type": "collection",
+                    "label": "Record"
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "upsert": {
+                      "mode": "chose"
+                    },
+                    "overwriteArrays": {
+                      "mode": "chose"
+                    }
+                  },
+                  "parameters": {
+                    "datastore": {
+                      "label": "Log_text_SQLFeeds"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 4200,
+                  "y": 3000
+                },
+                "parameters": [
+                  {
+                    "name": "datastore",
+                    "type": "datastore",
+                    "label": "Data store",
+                    "required": true
+                  }
+                ]
+              },
+              "parameters": {
+                "datastore": 23497
+              }
+            },
+            {
+              "id": 110,
+              "mapper": {},
+              "module": "builtin:BasicAggregator",
+              "version": 1,
+              "metadata": {
+                "restore": {
+                  "extra": {
+                    "feeder": {
+                      "label": "Microsoft 365 Excel - List Table Rows [1]"
+                    },
+                    "target": {
+                      "label": "Custom"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 4500,
+                  "y": 3000
+                }
+              },
+              "parameters": {
+                "feeder": 1
+              }
+            },
+            {
+              "id": 120,
+              "mapper": {
+                "key": "1",
+                "returnWrapped": false
+              },
+              "module": "datastore:GetRecord",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "key",
+                    "type": "text",
+                    "label": "Key",
+                    "required": true
+                  },
+                  {
+                    "name": "returnWrapped",
+                    "type": "boolean",
+                    "label": "Return Wrapped Output",
+                    "required": true
+                  }
+                ],
+                "restore": {
+                  "parameters": {
+                    "datastore": {
+                      "label": "Log_text_SQLFeeds"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 4800,
+                  "y": 3000
+                },
+                "interface": [
+                  {
+                    "help": "",
+                    "name": "Description",
+                    "type": "text",
+                    "label": null,
+                    "default": null,
+                    "required": false,
+                    "multiline": true
+                  }
+                ],
+                "parameters": [
+                  {
+                    "name": "datastore",
+                    "type": "datastore",
+                    "label": "Data store",
+                    "required": true
+                  }
+                ]
+              },
+              "parameters": {
+                "datastore": 23497
+              }
+            },
+            {
+              "id": 137,
+              "mapper": {
+                "key": "1",
+                "data": {
+                  "Description": "{{120.Description}}Processing complete{{newline}}"
+                },
+                "upsert": false,
+                "overwriteArrays": false
+              },
+              "module": "datastore:UpdateRecord",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "key",
+                    "type": "text",
+                    "label": "Key",
+                    "required": true
+                  },
+                  {
+                    "name": "upsert",
+                    "type": "boolean",
+                    "label": "Insert missing record",
+                    "required": true
+                  },
+                  {
+                    "name": "overwriteArrays",
+                    "type": "boolean",
+                    "label": "Overwrite an existing array in the record",
+                    "required": true
+                  },
+                  {
+                    "name": "data",
+                    "spec": [
+                      {
+                        "name": "Description",
+                        "type": "text",
+                        "label": null
+                      }
+                    ],
+                    "type": "collection",
+                    "label": "Record"
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "upsert": {
+                      "mode": "chose"
+                    },
+                    "overwriteArrays": {
+                      "mode": "chose"
+                    }
+                  },
+                  "parameters": {
+                    "datastore": {
+                      "label": "Log_text_SQLFeeds"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 5100,
+                  "y": 3000
+                },
+                "parameters": [
+                  {
+                    "name": "datastore",
+                    "type": "datastore",
+                    "label": "Data store",
+                    "required": true
+                  }
+                ]
+              },
+              "parameters": {
+                "datastore": 23497
+              }
+            },
+            {
+              "id": 119,
+              "mapper": {
+                "data": "{{120.Description}}End of process{{newline}}",
+                "site": "veritashcsolutions.sharepoint.com,63c7d06b-148b-4189-811c-5929df4c94ae,f64c3437-7ff8-45ba-ab34-03be0203669f",
+                "drive": "b!a9DHY4sUiUGBHFkp30yUrjc0TPb4f7pFqzQDvgIDZp-hLGrLFo5STILpD6_0hItb",
+                "enter": "path",
+                "folder": "/Veritas Integrations/Intaact feeds to SQL Server/Logs",
+                "select": "list",
+                "filename": "Dailyrun_log_{{formatDate(now; \"MMDDYYYY\")}}.txt",
+                "conflictBehavior": "replace"
+              },
+              "module": "microsoft-sharepoint:uploadAFile",
+              "onerror": [
+                {
+                  "id": 153,
+                  "mapper": {
+                    "count": "3",
+                    "retry": true,
+                    "interval": "15"
+                  },
+                  "module": "builtin:Break",
+                  "version": 1,
+                  "metadata": {
+                    "expect": [
+                      {
+                        "name": "retry",
+                        "type": "boolean",
+                        "label": "Automatically complete execution",
+                        "required": true
+                      },
+                      {
+                        "name": "count",
+                        "type": "uinteger",
+                        "label": "Number of attempts",
+                        "required": true,
+                        "validate": {
+                          "max": 10000,
+                          "min": 1
+                        }
+                      },
+                      {
+                        "name": "interval",
+                        "type": "uinteger",
+                        "label": "Interval between attempts",
+                        "required": true,
+                        "validate": {
+                          "max": 44640,
+                          "min": 1
+                        }
+                      }
+                    ],
+                    "restore": {
+                      "expect": {
+                        "retry": {
+                          "mode": "chose"
+                        }
+                      }
+                    },
+                    "designer": {
+                      "x": 5700,
+                      "y": 3000
+                    }
+                  },
+                  "parameters": {}
+                }
+              ],
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "enter",
+                    "type": "select",
+                    "label": "Enter (Folder Location ID & Path)",
+                    "required": true,
+                    "validate": {
+                      "enum": [
+                        "id",
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "filename",
+                    "type": "filename",
+                    "label": "File Name",
+                    "required": true
+                  },
+                  {
+                    "name": "data",
+                    "type": "buffer",
+                    "label": "Data",
+                    "required": true
+                  },
+                  {
+                    "name": "conflictBehavior",
+                    "type": "select",
+                    "label": "If the File with the Same Name Exists",
+                    "required": true,
+                    "validate": {
+                      "enum": [
+                        "replace",
+                        "rename",
+                        "fail"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "description",
+                    "type": "text",
+                    "label": "Description"
+                  },
+                  {
+                    "name": "select",
+                    "type": "select",
+                    "label": "Enter a Folder Location Path",
+                    "required": true,
+                    "validate": {
+                      "enum": [
+                        "map",
+                        "list"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "site",
+                    "type": "select",
+                    "label": "Site ID",
+                    "required": true
+                  },
+                  {
+                    "name": "drive",
+                    "type": "select",
+                    "label": "Drive ID",
+                    "required": true
+                  },
+                  {
+                    "name": "folder",
+                    "type": "folder",
+                    "label": "Folder"
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "site": {
+                      "mode": "chose",
+                      "label": "Internal"
+                    },
+                    "drive": {
+                      "mode": "chose",
+                      "label": "Integrations, owner: TK Admin (documentLibrary)"
+                    },
+                    "enter": {
+                      "label": "Folder Location Path"
+                    },
+                    "folder": {
+                      "mode": "chose",
+                      "path": [
+                        "Veritas Integrations",
+                        "Intaact feeds to SQL Server",
+                        "Logs"
+                      ]
+                    },
+                    "select": {
+                      "label": "Select from the list"
+                    },
+                    "conflictBehavior": {
+                      "label": "Replace the existing file"
+                    }
+                  },
+                  "parameters": {
+                    "__IMTCONN__": {
+                      "data": {
+                        "scoped": "true",
+                        "connection": "azure"
+                      },
+                      "label": "Veritas_Sharepoint_Connection (TimeClock Plus)"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 5400,
+                  "y": 3000
+                },
+                "parameters": [
+                  {
+                    "name": "__IMTCONN__",
+                    "type": "account:azure",
+                    "label": "Connection",
+                    "required": true
+                  }
+                ]
+              },
+              "parameters": {
+                "__IMTCONN__": 450334
+              }
+            }
+          ]
+        }
+      ],
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 2700,
+          "y": 1650
+        }
+      }
+    }
+  ],
+  "name": "Intaact feeds to SQL_daily run",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "designer": {
+      "orphans": [],
+      "samples": "[STRIPPED \u2014 live sample data removed for security]"
+    },
+    "scenario": {
+      "dlq": true,
+      "slots": null,
+      "dataloss": false,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "roundtrips": 1,
+      "sequential": false,
+      "confidential": false,
+      "freshVariables": false,
+      "autoCommitTriggerLast": true
+    }
+  }
+}

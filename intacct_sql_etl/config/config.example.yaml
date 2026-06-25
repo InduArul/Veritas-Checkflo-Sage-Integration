@@ -1,0 +1,88 @@
+# Intacct -> SQL Server ETL — configuration template
+# Copy to config.yaml (git-ignored) and fill in. SECRETS go in a secret store / .env,
+# referenced by key — never put passwords in this file. See specs/06_configuration_parameters.md.
+
+run:
+  test_mode: true                     # true = require test_-prefixed SQL targets (dev/test). false = PROD cutover.
+  schedule_times: ["08:00", "17:30"]   # orchestrator run times (OQ-8: confirm tz/weekdays)
+  timezone: "America/Los_Angeles"      # OQ-8 confirm
+  run_type_override: auto              # auto | daily | monthly  (auto = derive from run date)
+  window_override: null               # or {start: "01/01/2025", end: "01/31/2025"} for backfill
+  daily_lookback_months: 3            # daily window start = 1st of (N months ago)
+  monthly_start_rule: jan1_last_year  # monthly window start
+  chunk: calendar_month               # slice the window into calendar-month chunks
+  reconcile_granularity: per_chunk    # per_chunk (Make default) | per_window  (OQ-4)
+  date_format: "%m/%d/%Y"             # MM/DD/YYYY (Sage + proc params)
+
+environments:                          # replaces Config.xlsx / Env_data (OQ-12)
+  - name: Evergreen
+    sage_creds_key: Prod_Sage_Evergreen   # secret-store lookup key
+    enabled: true
+  # - name: <Env2>
+  #   sage_creds_key: Prod_Sage_<Env2>
+  #   enabled: true
+
+sage:
+  url: "https://api.intacct.com/ia/xml/xmlgw.phtml"
+  dtd_version: "3.0"
+  page_size: 2000
+  request_timeout_s: 60
+  gzip: true
+  # credentials per environment resolved from secret store by sage_creds_key + this pattern:
+  #   e.g. Prod_Sage_Evergreen_SENDER_ID / _SENDER_PASSWORD / _USER_ID / _USER_PASSWORD / _COMPANY_ID
+  secret_key_pattern: "{key}_{field}"
+
+gl:
+  object: GLDETAIL
+  date_field: BATCH_DATE
+  book_filter: ACCRUAL                 # business rule
+  count_basis: numremaining_plus_1
+  order_by: [AUWHENCREATED, RECORDNO, LINE_NO]
+  select_fields:                       # exact order matters
+    [LOCATIONID, LOCATIONNAME, DEPARTMENTID, DEPARTMENTTITLE, RECORDNO, ACCOUNTNO,
+     ACCOUNTTITLE, ENTRY_DATE, BATCH_DATE, VENDORID, VENDORNAME, LINE_NO, RECORDID,
+     AMOUNT, PRDESCRIPTION, DESCRIPTION, SYMBOL]
+
+ap:
+  object: APBILL
+  date_field: WHENPOSTED
+  show_private: true                   # business rule
+  count_basis: totalcount
+  order_by: [RECORDNO]
+  select_fields:                       # the 7-field PAGE set (load set)
+    [MEGAENTITYID, RECORDNO, RECORDID, VENDORID, VENDORNAME, STAMPLI_LINK, PLATFORM_SERVICES_LINK]
+
+sql:
+  server: "<server\\instance>"        # SECRET/config (OQ-11)
+  database: Intacct
+  auth_mode: sql                      # sql | windows | aad  (OQ-11)
+  driver: "ODBC Driver 17 for SQL Server"
+  username: "<sql_user>"              # if sql auth; password from secret store
+  password_secret_key: SQL_PASSWORD   # secret-store key for the SQL password (sql auth)
+  aad_authentication: ActiveDirectoryInteractive   # only when auth_mode: aad
+  odbc_extra: ""                      # appended verbatim, e.g. "Encrypt=yes;TrustServerCertificate=yes"
+  # In test_mode the names below MUST be test_-prefixed (e.g. dbo.test_GLTable / test_AddGLDetailBulk).
+  gl_table: dbo.GLTable
+  apbill_table: dbo.APBillTable
+  gl_delete_date_field: Entry_Date    # mainflow deletes GL on Entry_Date (OQ-2 vs gl.date_field)
+  apbill_delete_date_field: WHENPOSTED # used only when apbill_full_reload: false
+  apbill_full_reload: true            # APBillTable wiped fully each run
+  load_strategy: transaction          # transaction | staging_swap (OQ-5; staging not yet implemented)
+  proc_add_gl: AddGLDetailBulk
+  proc_add_ap: AddAPBillBulk
+  proc_sync_links: "[Intacct].[dbo].[SyncAPLinksToGL]"
+  proc_update_vendor: "[Intacct].[dbo].[UpdateVendorInfoInGL]"
+
+retry:
+  count: 3                            # transport attempts (1 = no retry)
+  interval_s: 60                      # Make uses 900 (15 min); tune w/ backoff + honor Retry-After
+  backoff: 2.0                        # multiplier applied to interval_s each retry
+  reconcile_settle_s: 3              # pause before reconcile procs (Make module 71)
+
+log:
+  sink: file                          # file | stdout
+  level: INFO                         # DEBUG | INFO | WARNING | ERROR (stdlib logging)
+  dir: "./logs"                       # configurable log location (created if missing)
+  file_name_pattern: "{run_type}run_log_{date}.txt"   # {date} = MMDDYYYY
+  sharepoint_upload: false            # parity option (OQ-6)
+  sharepoint_folder: "/Veritas Integrations/Intaact feeds to SQL Server/Logs"

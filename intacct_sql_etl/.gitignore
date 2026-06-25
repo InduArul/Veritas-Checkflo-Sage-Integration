@@ -1,0 +1,19 @@
+# Filled-in config holds connection details — keep only the .example template in VCS
+config.yaml
+config.*.yaml
+!config.example.yaml
+
+# Secrets
+.env
+*.secret
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Local run artifacts
+logs/
+*.log

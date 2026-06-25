@@ -1,0 +1,16 @@
+{
+  "$comment": "Shared project settings. The PreToolUse hook hard-blocks writes to PRODUCTION Intacct tables/procs for the intacct_sql_etl project (dev/test must use test_-prefixed targets). See intacct_sql_etl/CLAUDE.md + specs/11.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/prod_write_guard.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

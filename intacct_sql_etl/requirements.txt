@@ -1,0 +1,7 @@
+# intacct_sql_etl runtime + test dependencies (pinned at W0)
+pyodbc>=5.1,<6        # SQL Server access (kept behind sql_loader adapter; not imported by pure-logic)
+requests>=2.31,<3     # Sage Intacct XML gateway HTTP
+PyYAML>=6,<7          # config loading
+
+# --- test/dev ---
+pytest>=8,<10

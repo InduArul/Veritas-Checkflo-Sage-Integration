@@ -1,0 +1,2167 @@
+{
+  "flow": [
+    {
+      "id": 96,
+      "mapper": {
+        "key": "1",
+        "data": {
+          "Description": "Start of process{{newline}}"
+        },
+        "overwrite": true
+      },
+      "module": "datastore:AddRecord",
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "key",
+            "type": "text",
+            "label": "Key"
+          },
+          {
+            "name": "overwrite",
+            "type": "boolean",
+            "label": "Overwrite an existing record",
+            "required": true
+          },
+          {
+            "name": "data",
+            "spec": [
+              {
+                "name": "Description",
+                "type": "text",
+                "label": null
+              }
+            ],
+            "type": "collection",
+            "label": "Record"
+          }
+        ],
+        "restore": {
+          "expect": {
+            "overwrite": {
+              "mode": "chose"
+            }
+          },
+          "parameters": {
+            "datastore": {
+              "label": "Log_text_SQLFeeds"
+            }
+          }
+        },
+        "designer": {
+          "x": 0,
+          "y": 900
+        },
+        "parameters": [
+          {
+            "name": "datastore",
+            "type": "datastore",
+            "label": "Data store",
+            "required": true
+          }
+        ]
+      },
+      "parameters": {
+        "datastore": 23497
+      }
+    },
+    {
+      "id": 2,
+      "mapper": {
+        "scope": "roundtrip",
+        "variables": [
+          {
+            "name": "Today_date",
+            "value": "{{formatDate(addDays(addMonths(setDate(now; 1); 1); -1); \"MM/DD/YYYY\")}}"
+          },
+          {
+            "name": "Report_start_date",
+            "value": "{{if(formatDate(now; \"DD\") != 1; formatDate(addMonths(now; -3); \"MM/01/YYYY\"); formatDate(addYears(now; -1); \"01/01/YYYY\"))}}"
+          },
+          {
+            "name": "run_type",
+            "value": "{{if(formatDate(now; \"DD\") != 1; 1; 2)}}"
+          }
+        ]
+      },
+      "module": "util:SetVariables",
+      "onerror": [
+        {
+          "id": 154,
+          "mapper": {
+            "count": "3",
+            "retry": true,
+            "interval": "15"
+          },
+          "module": "builtin:Break",
+          "version": 1,
+          "metadata": {
+            "expect": [
+              {
+                "name": "retry",
+                "type": "boolean",
+                "label": "Automatically complete execution",
+                "required": true
+              },
+              {
+                "name": "count",
+                "type": "uinteger",
+                "label": "Number of attempts",
+                "required": true,
+                "validate": {
+                  "max": 10000,
+                  "min": 1
+                }
+              },
+              {
+                "name": "interval",
+                "type": "uinteger",
+                "label": "Interval between attempts",
+                "required": true,
+                "validate": {
+                  "max": 44640,
+                  "min": 1
+                }
+              }
+            ],
+            "restore": {
+              "expect": {
+                "retry": {
+                  "mode": "chose"
+                }
+              }
+            },
+            "designer": {
+              "x": 600,
+              "y": 1800
+            }
+          },
+          "parameters": {}
+        }
+      ],
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "variables",
+            "spec": [
+              {
+                "name": "name",
+                "type": "text",
+                "label": "Variable name",
+                "required": true
+              },
+              {
+                "name": "value",
+                "type": "any",
+                "label": "Variable value"
+              }
+            ],
+            "type": "array",
+            "label": "Variables"
+          },
+          {
+            "name": "scope",
+            "type": "select",
+            "label": "Variable lifetime",
+            "required": true,
+            "validate": {
+              "enum": [
+                "roundtrip",
+                "execution"
+              ]
+            }
+          }
+        ],
+        "restore": {
+          "expect": {
+            "scope": {
+              "label": "One cycle"
+            },
+            "variables": {
+              "items": [
+                null,
+                null,
+                null
+              ]
+            }
+          }
+        },
+        "designer": {
+          "x": 300,
+          "y": 900
+        },
+        "interface": [
+          {
+            "name": "Today_date",
+            "type": "any",
+            "label": "Today_date"
+          },
+          {
+            "name": "Report_start_date",
+            "type": "any",
+            "label": "Report_start_date"
+          },
+          {
+            "name": "run_type",
+            "type": "any",
+            "label": "run_type"
+          }
+        ]
+      },
+      "parameters": {}
+    },
+    {
+      "id": 162,
+      "mapper": {
+        "key": "1",
+        "returnWrapped": false
+      },
+      "module": "datastore:GetRecord",
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "key",
+            "type": "text",
+            "label": "Key",
+            "required": true
+          },
+          {
+            "name": "returnWrapped",
+            "type": "boolean",
+            "label": "Return Wrapped Output",
+            "required": true
+          }
+        ],
+        "restore": {
+          "parameters": {
+            "datastore": {
+              "label": "Log_text_SQLFeeds"
+            }
+          }
+        },
+        "designer": {
+          "x": 600,
+          "y": 750
+        },
+        "interface": [
+          {
+            "help": "",
+            "name": "Description",
+            "type": "text",
+            "label": null,
+            "default": null,
+            "required": false,
+            "multiline": true
+          }
+        ],
+        "parameters": [
+          {
+            "name": "datastore",
+            "type": "datastore",
+            "label": "Data store",
+            "required": true
+          }
+        ]
+      },
+      "parameters": {
+        "datastore": 23497
+      }
+    },
+    {
+      "id": 135,
+      "mapper": {
+        "where": [
+          [
+            {
+              "a": "Entry_Date",
+              "b": "{{2.Report_start_date}}",
+              "o": "greaterorequal"
+            },
+            {
+              "a": "Entry_Date",
+              "b": "{{2.Today_date}}",
+              "o": "lessorequal"
+            }
+          ]
+        ]
+      },
+      "module": "mssql:DeleteFromTable",
+      "onerror": [
+        {
+          "id": 150,
+          "mapper": {
+            "count": "3",
+            "retry": true,
+            "interval": "15"
+          },
+          "module": "builtin:Break",
+          "version": 1,
+          "metadata": {
+            "expect": [
+              {
+                "name": "retry",
+                "type": "boolean",
+                "label": "Automatically complete execution",
+                "required": true
+              },
+              {
+                "name": "count",
+                "type": "uinteger",
+                "label": "Number of attempts",
+                "required": true,
+                "validate": {
+                  "max": 10000,
+                  "min": 1
+                }
+              },
+              {
+                "name": "interval",
+                "type": "uinteger",
+                "label": "Interval between attempts",
+                "required": true,
+                "validate": {
+                  "max": 44640,
+                  "min": 1
+                }
+              }
+            ],
+            "restore": {
+              "expect": {
+                "retry": {
+                  "mode": "chose"
+                }
+              }
+            },
+            "designer": {
+              "x": 1200,
+              "y": 1500
+            }
+          },
+          "parameters": {}
+        }
+      ],
+      "version": 2,
+      "metadata": {
+        "expect": [
+          {
+            "name": "where",
+            "type": "filter",
+            "label": "Filter",
+            "options": {
+              "store": [
+                {
+                  "label": "Location_ID",
+                  "value": "Location_ID"
+                },
+                {
+                  "label": "Location_Name",
+                  "value": "Location_Name"
+                },
+                {
+                  "label": "Dept_ID",
+                  "value": "Dept_ID"
+                },
+                {
+                  "label": "Dept_Name",
+                  "value": "Dept_Name"
+                },
+                {
+                  "label": "Record_No",
+                  "value": "Record_No"
+                },
+                {
+                  "label": "Account_No",
+                  "value": "Account_No"
+                },
+                {
+                  "label": "Account_Title",
+                  "value": "Account_Title"
+                },
+                {
+                  "label": "Entry_Date",
+                  "value": "Entry_Date"
+                },
+                {
+                  "label": "GL_Posting_Date",
+                  "value": "GL_Posting_Date"
+                },
+                {
+                  "label": "Vendor_ID",
+                  "value": "Vendor_ID"
+                },
+                {
+                  "label": "Vendor_Name",
+                  "value": "Vendor_Name"
+                },
+                {
+                  "label": "Line_No",
+                  "value": "Line_No"
+                },
+                {
+                  "label": "Bill_No",
+                  "value": "Bill_No"
+                },
+                {
+                  "label": "Base_Amount",
+                  "value": "Base_Amount"
+                },
+                {
+                  "label": "Description",
+                  "value": "Description"
+                },
+                {
+                  "label": "Memo",
+                  "value": "Memo"
+                },
+                {
+                  "label": "Stampli_Link",
+                  "value": "Stampli_Link"
+                },
+                {
+                  "label": "Platform_Services_Link",
+                  "value": "Platform_Services_Link"
+                },
+                {
+                  "label": "Journal",
+                  "value": "Journal"
+                }
+              ],
+              "operators": [
+                {
+                  "label": "Basic",
+                  "options": [
+                    {
+                      "label": "Is not null",
+                      "value": "exist"
+                    },
+                    {
+                      "label": "Is null",
+                      "value": "notexist"
+                    },
+                    {
+                      "label": "Equal to",
+                      "value": "equal"
+                    },
+                    {
+                      "label": "Not equal to",
+                      "value": "notequal"
+                    },
+                    {
+                      "label": "Greater than",
+                      "value": "greater"
+                    },
+                    {
+                      "label": "Greater than or equal to",
+                      "value": "greaterorequal"
+                    },
+                    {
+                      "label": "Less than",
+                      "value": "less"
+                    },
+                    {
+                      "label": "Less than or equal to",
+                      "value": "lessorequal"
+                    },
+                    {
+                      "label": "Contains",
+                      "value": "contain"
+                    },
+                    {
+                      "label": "Does not contain",
+                      "value": "notcontain"
+                    },
+                    {
+                      "label": "Starts with",
+                      "value": "startwith"
+                    },
+                    {
+                      "label": "Does not start with",
+                      "value": "notstartwith"
+                    },
+                    {
+                      "label": "Ends with",
+                      "value": "endwith"
+                    },
+                    {
+                      "label": "Does not end with",
+                      "value": "notendwith"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "restore": {
+          "parameters": {
+            "table": {
+              "label": "Intacct.dbo.GLTable"
+            },
+            "account": {
+              "data": {
+                "scoped": "true",
+                "connection": "mssql"
+              },
+              "label": "My Microsoft SQL Server connection"
+            },
+            "isolationLevel": {
+              "label": "Empty"
+            }
+          }
+        },
+        "designer": {
+          "x": 900,
+          "y": 750
+        },
+        "parameters": [
+          {
+            "name": "account",
+            "type": "account:mssql",
+            "label": "Connection",
+            "required": true
+          },
+          {
+            "name": "isToManageDataInSharedTransaction",
+            "type": "boolean",
+            "label": "Manage data within the shared transaction",
+            "required": true
+          },
+          {
+            "name": "isolationLevel",
+            "type": "select",
+            "label": "Transaction Isolation Level",
+            "validate": {
+              "enum": [
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            }
+          },
+          {
+            "name": "table",
+            "type": "select",
+            "label": "Table",
+            "required": true
+          }
+        ]
+      },
+      "parameters": {
+        "table": "[Intacct].[dbo].[GLTable]",
+        "account": 2803828,
+        "isolationLevel": "",
+        "isToManageDataInSharedTransaction": true
+      }
+    },
+    {
+      "id": 136,
+      "mapper": {
+        "where": []
+      },
+      "module": "mssql:DeleteFromTable",
+      "onerror": [
+        {
+          "id": 151,
+          "mapper": {
+            "count": "3",
+            "retry": true,
+            "interval": "15"
+          },
+          "module": "builtin:Break",
+          "version": 1,
+          "metadata": {
+            "expect": [
+              {
+                "name": "retry",
+                "type": "boolean",
+                "label": "Automatically complete execution",
+                "required": true
+              },
+              {
+                "name": "count",
+                "type": "uinteger",
+                "label": "Number of attempts",
+                "required": true,
+                "validate": {
+                  "max": 10000,
+                  "min": 1
+                }
+              },
+              {
+                "name": "interval",
+                "type": "uinteger",
+                "label": "Interval between attempts",
+                "required": true,
+                "validate": {
+                  "max": 44640,
+                  "min": 1
+                }
+              }
+            ],
+            "restore": {
+              "expect": {
+                "retry": {
+                  "mode": "chose"
+                }
+              }
+            },
+            "designer": {
+              "x": 1500,
+              "y": 1200
+            }
+          },
+          "parameters": {}
+        }
+      ],
+      "version": 2,
+      "metadata": {
+        "expect": [
+          {
+            "name": "where",
+            "type": "filter",
+            "label": "Filter",
+            "options": {
+              "store": [
+                {
+                  "label": "Location_ID",
+                  "value": "Location_ID"
+                },
+                {
+                  "label": "Record_No",
+                  "value": "Record_No"
+                },
+                {
+                  "label": "Record_ID",
+                  "value": "Record_ID"
+                },
+                {
+                  "label": "Stampli_Link",
+                  "value": "Stampli_Link"
+                },
+                {
+                  "label": "Platform_Services_Link",
+                  "value": "Platform_Services_Link"
+                },
+                {
+                  "label": "Vendor_ID",
+                  "value": "Vendor_ID"
+                },
+                {
+                  "label": "Vendor_Name",
+                  "value": "Vendor_Name"
+                }
+              ],
+              "operators": [
+                {
+                  "label": "Basic",
+                  "options": [
+                    {
+                      "label": "Is not null",
+                      "value": "exist"
+                    },
+                    {
+                      "label": "Is null",
+                      "value": "notexist"
+                    },
+                    {
+                      "label": "Equal to",
+                      "value": "equal"
+                    },
+                    {
+                      "label": "Not equal to",
+                      "value": "notequal"
+                    },
+                    {
+                      "label": "Greater than",
+                      "value": "greater"
+                    },
+                    {
+                      "label": "Greater than or equal to",
+                      "value": "greaterorequal"
+                    },
+                    {
+                      "label": "Less than",
+                      "value": "less"
+                    },
+                    {
+                      "label": "Less than or equal to",
+                      "value": "lessorequal"
+                    },
+                    {
+                      "label": "Contains",
+                      "value": "contain"
+                    },
+                    {
+                      "label": "Does not contain",
+                      "value": "notcontain"
+                    },
+                    {
+                      "label": "Starts with",
+                      "value": "startwith"
+                    },
+                    {
+                      "label": "Does not start with",
+                      "value": "notstartwith"
+                    },
+                    {
+                      "label": "Ends with",
+                      "value": "endwith"
+                    },
+                    {
+                      "label": "Does not end with",
+                      "value": "notendwith"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "restore": {
+          "parameters": {
+            "table": {
+              "label": "Intacct.dbo.APBillTable"
+            },
+            "account": {
+              "data": {
+                "scoped": "true",
+                "connection": "mssql"
+              },
+              "label": "My Microsoft SQL Server connection"
+            },
+            "isolationLevel": {
+              "label": "Empty"
+            }
+          }
+        },
+        "designer": {
+          "x": 1200,
+          "y": 600
+        },
+        "parameters": [
+          {
+            "name": "account",
+            "type": "account:mssql",
+            "label": "Connection",
+            "required": true
+          },
+          {
+            "name": "isToManageDataInSharedTransaction",
+            "type": "boolean",
+            "label": "Manage data within the shared transaction",
+            "required": true
+          },
+          {
+            "name": "isolationLevel",
+            "type": "select",
+            "label": "Transaction Isolation Level",
+            "validate": {
+              "enum": [
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            }
+          },
+          {
+            "name": "table",
+            "type": "select",
+            "label": "Table",
+            "required": true
+          }
+        ]
+      },
+      "parameters": {
+        "table": "[Intacct].[dbo].[APBillTable]",
+        "account": 2803828,
+        "isolationLevel": "",
+        "isToManageDataInSharedTransaction": true
+      }
+    },
+    {
+      "id": 99,
+      "mapper": {
+        "key": "1",
+        "data": {
+          "Description": "{{162.Description}}{{135.rowsAffected}} records deleted from GL table{{newline}}{{136.rowsAffected}} records deleted from APBill table{{newline}}"
+        },
+        "upsert": false,
+        "overwriteArrays": false
+      },
+      "module": "datastore:UpdateRecord",
+      "version": 1,
+      "metadata": {
+        "expect": [
+          {
+            "name": "key",
+            "type": "text",
+            "label": "Key",
+            "required": true
+          },
+          {
+            "name": "upsert",
+            "type": "boolean",
+            "label": "Insert missing record",
+            "required": true
+          },
+          {
+            "name": "overwriteArrays",
+            "type": "boolean",
+            "label": "Overwrite an existing array in the record",
+            "required": true
+          },
+          {
+            "name": "data",
+            "spec": [
+              {
+                "name": "Description",
+                "type": "text",
+                "label": null
+              }
+            ],
+            "type": "collection",
+            "label": "Record"
+          }
+        ],
+        "restore": {
+          "expect": {
+            "upsert": {
+              "mode": "chose"
+            },
+            "overwriteArrays": {
+              "mode": "chose"
+            }
+          },
+          "parameters": {
+            "datastore": {
+              "label": "Log_text_SQLFeeds"
+            }
+          }
+        },
+        "designer": {
+          "x": 1500,
+          "y": 450
+        },
+        "parameters": [
+          {
+            "name": "datastore",
+            "type": "datastore",
+            "label": "Data store",
+            "required": true
+          }
+        ]
+      },
+      "parameters": {
+        "datastore": 23497
+      }
+    },
+    {
+      "id": 160,
+      "mapper": null,
+      "module": "builtin:BasicRouter",
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 163,
+              "filter": {
+                "name": "Monthly_run",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{2.run_type}}",
+                      "b": "2",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "step": "1",
+                "start": "1",
+                "repeats": "26"
+              },
+              "module": "builtin:BasicRepeater",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "start",
+                    "type": "number",
+                    "label": "Initial value",
+                    "required": true
+                  },
+                  {
+                    "name": "repeats",
+                    "type": "number",
+                    "label": "Repeats",
+                    "required": true,
+                    "validate": {
+                      "max": 10000,
+                      "min": 0
+                    }
+                  },
+                  {
+                    "name": "step",
+                    "type": "number",
+                    "label": "Step",
+                    "required": true
+                  }
+                ],
+                "restore": {},
+                "advanced": true,
+                "designer": {
+                  "x": 2100,
+                  "y": 150
+                }
+              },
+              "parameters": {}
+            },
+            {
+              "id": 165,
+              "mapper": {
+                "variables": [
+                  "Report_start_date",
+                  "Report_end_date"
+                ]
+              },
+              "module": "util:GetVariables",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "variables",
+                    "spec": {
+                      "name": "value",
+                      "type": "text",
+                      "label": "Variable name",
+                      "required": true
+                    },
+                    "type": "array",
+                    "label": "Variables"
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "variables": {
+                      "items": [
+                        null,
+                        null
+                      ]
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 2400,
+                  "y": 150
+                },
+                "interface": [
+                  {
+                    "name": "Report_start_date",
+                    "type": "any",
+                    "label": "Report_start_date"
+                  },
+                  {
+                    "name": "Report_end_date",
+                    "type": "any",
+                    "label": "Report_end_date"
+                  }
+                ]
+              },
+              "parameters": {}
+            },
+            {
+              "id": 164,
+              "mapper": {
+                "scope": "roundtrip",
+                "variables": [
+                  {
+                    "name": "Report_start_date",
+                    "value": "{{if(163.i = 1; formatDate(2.Report_start_date; \"MM/DD/YYYY\"); formatDate(addDays(165.Report_end_date; 1); \"MM/DD/YYYY\"))}}"
+                  },
+                  {
+                    "name": "Report_end_date",
+                    "value": "{{if(163.i = 1; formatDate(addDays(addMonths(2.Report_start_date; 1); -1); \"MM/DD/YYYY\"); formatDate(addMonths(165.Report_end_date; 1); \"MM/DD/YYYY\"))}}"
+                  }
+                ]
+              },
+              "module": "util:SetVariables",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "variables",
+                    "spec": [
+                      {
+                        "name": "name",
+                        "type": "text",
+                        "label": "Variable name",
+                        "required": true
+                      },
+                      {
+                        "name": "value",
+                        "type": "any",
+                        "label": "Variable value"
+                      }
+                    ],
+                    "type": "array",
+                    "label": "Variables"
+                  },
+                  {
+                    "name": "scope",
+                    "type": "select",
+                    "label": "Variable lifetime",
+                    "required": true,
+                    "validate": {
+                      "enum": [
+                        "roundtrip",
+                        "execution"
+                      ]
+                    }
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "scope": {
+                      "label": "One cycle"
+                    },
+                    "variables": {
+                      "items": [
+                        null,
+                        null
+                      ]
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 2700,
+                  "y": 150
+                },
+                "interface": [
+                  {
+                    "name": "Report_start_date",
+                    "type": "any",
+                    "label": "Report_start_date"
+                  },
+                  {
+                    "name": "Report_end_date",
+                    "type": "any",
+                    "label": "Report_end_date"
+                  }
+                ]
+              },
+              "parameters": {}
+            },
+            {
+              "id": 171,
+              "filter": {
+                "name": "",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{164.Report_start_date}}",
+                      "b": "{{2.Today_date}}",
+                      "o": "date:lessorequal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": null,
+              "module": "builtin:BasicRouter",
+              "routes": [
+                {
+                  "flow": [
+                    {
+                      "id": 169,
+                      "filter": {
+                        "name": "",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{164.Report_end_date}}",
+                              "b": "{{2.Today_date}}",
+                              "o": "date:greaterorequal"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": {
+                        "scope": "roundtrip",
+                        "variables": [
+                          {
+                            "name": "Report_end_date",
+                            "value": "{{2.Today_date}}"
+                          }
+                        ]
+                      },
+                      "module": "util:SetVariables",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "variables",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Variable name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "any",
+                                "label": "Variable value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Variables"
+                          },
+                          {
+                            "name": "scope",
+                            "type": "select",
+                            "label": "Variable lifetime",
+                            "required": true,
+                            "validate": {
+                              "enum": [
+                                "roundtrip",
+                                "execution"
+                              ]
+                            }
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "scope": {
+                              "label": "One cycle"
+                            },
+                            "variables": {
+                              "items": [
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3300,
+                          "y": 0
+                        },
+                        "interface": [
+                          {
+                            "name": "Report_end_date",
+                            "type": "any",
+                            "label": "Report_end_date"
+                          }
+                        ]
+                      },
+                      "parameters": {}
+                    }
+                  ]
+                },
+                {
+                  "flow": [
+                    {
+                      "id": 172,
+                      "mapper": {
+                        "variables": [
+                          "Report_start_date",
+                          "Report_end_date"
+                        ]
+                      },
+                      "module": "util:GetVariables",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "variables",
+                            "spec": {
+                              "name": "value",
+                              "type": "text",
+                              "label": "Variable name",
+                              "required": true
+                            },
+                            "type": "array",
+                            "label": "Variables"
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "variables": {
+                              "items": [
+                                null,
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3300,
+                          "y": 300
+                        },
+                        "interface": [
+                          {
+                            "name": "Report_start_date",
+                            "type": "any",
+                            "label": "Report_start_date"
+                          },
+                          {
+                            "name": "Report_end_date",
+                            "type": "any",
+                            "label": "Report_end_date"
+                          }
+                        ]
+                      },
+                      "parameters": {}
+                    },
+                    {
+                      "id": 173,
+                      "mapper": {
+                        "ca": "",
+                        "qs": [],
+                        "url": "https://hook.us2.make.com/xtxrfsh8obcv8kbxnvrqqfmzpm3o4o4b",
+                        "data": "{\r\n  \"Report_start_date\": \"{{172.Report_start_date}}\",\r\n  \"Report_end_date\": \"{{172.Report_end_date}}\",\n  \"Instance\":\"{{163.i}}\"\n}",
+                        "gzip": true,
+                        "method": "post",
+                        "headers": [],
+                        "timeout": "",
+                        "useMtls": false,
+                        "authPass": "",
+                        "authUser": "",
+                        "bodyType": "raw",
+                        "contentType": "application/json",
+                        "serializeUrl": false,
+                        "shareCookies": "[REDACTED]",
+                        "parseResponse": true,
+                        "followRedirect": true,
+                        "useQuerystring": false,
+                        "followAllRedirects": false,
+                        "rejectUnauthorized": true
+                      },
+                      "module": "http:ActionSendData",
+                      "version": 3,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "url",
+                            "type": "url",
+                            "label": "URL",
+                            "required": true
+                          },
+                          {
+                            "name": "serializeUrl",
+                            "type": "boolean",
+                            "label": "Serialize URL",
+                            "required": true
+                          },
+                          {
+                            "name": "method",
+                            "type": "select",
+                            "label": "Method",
+                            "required": true,
+                            "validate": {
+                              "enum": [
+                                "get",
+                                "head",
+                                "post",
+                                "put",
+                                "patch",
+                                "delete",
+                                "options"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "headers",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Headers"
+                          },
+                          {
+                            "name": "qs",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Query String"
+                          },
+                          {
+                            "name": "bodyType",
+                            "type": "select",
+                            "label": "Body type",
+                            "validate": {
+                              "enum": [
+                                "raw",
+                                "x_www_form_urlencoded",
+                                "multipart_form_data"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "parseResponse",
+                            "type": "boolean",
+                            "label": "Parse response",
+                            "required": true
+                          },
+                          {
+                            "name": "authUser",
+                            "type": "text",
+                            "label": "User name"
+                          },
+                          {
+                            "name": "authPass",
+                            "type": "password",
+                            "label": "Password"
+                          },
+                          {
+                            "name": "timeout",
+                            "type": "uinteger",
+                            "label": "Timeout",
+                            "validate": {
+                              "max": 300,
+                              "min": 1
+                            }
+                          },
+                          {
+                            "name": "shareCookies",
+                            "type": "boolean",
+                            "label": "Share cookies with other HTTP modules",
+                            "required": true
+                          },
+                          {
+                            "name": "ca",
+                            "type": "cert",
+                            "label": "Self-signed certificate"
+                          },
+                          {
+                            "name": "rejectUnauthorized",
+                            "type": "boolean",
+                            "label": "Reject connections that are using unverified (self-signed) certificates",
+                            "required": true
+                          },
+                          {
+                            "name": "followRedirect",
+                            "type": "boolean",
+                            "label": "Follow redirect",
+                            "required": true
+                          },
+                          {
+                            "name": "useQuerystring",
+                            "type": "boolean",
+                            "label": "Disable serialization of multiple same query string keys as arrays",
+                            "required": true
+                          },
+                          {
+                            "name": "gzip",
+                            "type": "boolean",
+                            "label": "Request compressed content",
+                            "required": true
+                          },
+                          {
+                            "name": "useMtls",
+                            "type": "boolean",
+                            "label": "Use Mutual TLS",
+                            "required": true
+                          },
+                          {
+                            "name": "contentType",
+                            "type": "select",
+                            "label": "Content type",
+                            "validate": {
+                              "enum": [
+                                "text/plain",
+                                "application/json",
+                                "application/xml",
+                                "text/xml",
+                                "text/html",
+                                "custom"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "data",
+                            "type": "buffer",
+                            "label": "Request content"
+                          },
+                          {
+                            "name": "followAllRedirects",
+                            "type": "boolean",
+                            "label": "Follow all redirect",
+                            "required": true
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "qs": {
+                              "mode": "chose"
+                            },
+                            "method": {
+                              "mode": "chose",
+                              "label": "POST"
+                            },
+                            "headers": {
+                              "mode": "chose"
+                            },
+                            "bodyType": {
+                              "label": "Raw"
+                            },
+                            "contentType": {
+                              "label": "JSON (application/json)"
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3600,
+                          "y": 300
+                        },
+                        "parameters": [
+                          {
+                            "name": "handleErrors",
+                            "type": "boolean",
+                            "label": "Evaluate all states as errors (except for 2xx and 3xx )",
+                            "required": true
+                          },
+                          {
+                            "name": "useNewZLibDeCompress",
+                            "type": "hidden"
+                          }
+                        ]
+                      },
+                      "parameters": {
+                        "handleErrors": true,
+                        "useNewZLibDeCompress": true
+                      }
+                    },
+                    {
+                      "id": 174,
+                      "mapper": {
+                        "duration": "30"
+                      },
+                      "module": "util:FunctionSleep",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "duration",
+                            "type": "uinteger",
+                            "label": "Delay",
+                            "required": true,
+                            "validate": {
+                              "max": 300,
+                              "min": 1
+                            }
+                          }
+                        ],
+                        "restore": {},
+                        "designer": {
+                          "x": 3900,
+                          "y": 300
+                        }
+                      },
+                      "parameters": {}
+                    }
+                  ]
+                }
+              ],
+              "version": 1,
+              "metadata": {
+                "designer": {
+                  "x": 3000,
+                  "y": 150
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 176,
+              "filter": {
+                "name": "daily run",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{2.run_type}}",
+                      "b": "1",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "step": "1",
+                "start": "1",
+                "repeats": "5"
+              },
+              "module": "builtin:BasicRepeater",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "start",
+                    "type": "number",
+                    "label": "Initial value",
+                    "required": true
+                  },
+                  {
+                    "name": "repeats",
+                    "type": "number",
+                    "label": "Repeats",
+                    "required": true,
+                    "validate": {
+                      "max": 10000,
+                      "min": 0
+                    }
+                  },
+                  {
+                    "name": "step",
+                    "type": "number",
+                    "label": "Step",
+                    "required": true
+                  }
+                ],
+                "restore": {},
+                "advanced": true,
+                "designer": {
+                  "x": 2100,
+                  "y": 750
+                }
+              },
+              "parameters": {}
+            },
+            {
+              "id": 177,
+              "mapper": {
+                "variables": [
+                  "Report_start_date",
+                  "Report_end_date"
+                ]
+              },
+              "module": "util:GetVariables",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "variables",
+                    "spec": {
+                      "name": "value",
+                      "type": "text",
+                      "label": "Variable name",
+                      "required": true
+                    },
+                    "type": "array",
+                    "label": "Variables"
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "variables": {
+                      "items": [
+                        null,
+                        null
+                      ]
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 2400,
+                  "y": 750
+                },
+                "interface": [
+                  {
+                    "name": "Report_start_date",
+                    "type": "any",
+                    "label": "Report_start_date"
+                  },
+                  {
+                    "name": "Report_end_date",
+                    "type": "any",
+                    "label": "Report_end_date"
+                  }
+                ]
+              },
+              "parameters": {}
+            },
+            {
+              "id": 178,
+              "mapper": {
+                "scope": "roundtrip",
+                "variables": [
+                  {
+                    "name": "Report_start_date",
+                    "value": "{{if(176.i = 1; formatDate(2.Report_start_date; \"MM/DD/YYYY\"); formatDate(addDays(177.Report_end_date; 1); \"MM/DD/YYYY\"))}}"
+                  },
+                  {
+                    "name": "Report_end_date",
+                    "value": "{{if(176.i = 1; formatDate(addDays(addMonths(2.Report_start_date; 1); -1); \"MM/DD/YYYY\"); formatDate(addMonths(177.Report_end_date; 1); \"MM/DD/YYYY\"))}}"
+                  }
+                ]
+              },
+              "module": "util:SetVariables",
+              "version": 1,
+              "metadata": {
+                "expect": [
+                  {
+                    "name": "variables",
+                    "spec": [
+                      {
+                        "name": "name",
+                        "type": "text",
+                        "label": "Variable name",
+                        "required": true
+                      },
+                      {
+                        "name": "value",
+                        "type": "any",
+                        "label": "Variable value"
+                      }
+                    ],
+                    "type": "array",
+                    "label": "Variables"
+                  },
+                  {
+                    "name": "scope",
+                    "type": "select",
+                    "label": "Variable lifetime",
+                    "required": true,
+                    "validate": {
+                      "enum": [
+                        "roundtrip",
+                        "execution"
+                      ]
+                    }
+                  }
+                ],
+                "restore": {
+                  "expect": {
+                    "scope": {
+                      "label": "One cycle"
+                    },
+                    "variables": {
+                      "items": [
+                        null,
+                        null
+                      ]
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 2700,
+                  "y": 750
+                },
+                "interface": [
+                  {
+                    "name": "Report_start_date",
+                    "type": "any",
+                    "label": "Report_start_date"
+                  },
+                  {
+                    "name": "Report_end_date",
+                    "type": "any",
+                    "label": "Report_end_date"
+                  }
+                ]
+              },
+              "parameters": {}
+            },
+            {
+              "id": 179,
+              "filter": {
+                "name": "",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{178.Report_start_date}}",
+                      "b": "{{2.Today_date}}",
+                      "o": "date:lessorequal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": null,
+              "module": "builtin:BasicRouter",
+              "routes": [
+                {
+                  "flow": [
+                    {
+                      "id": 180,
+                      "filter": {
+                        "name": "",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{178.Report_end_date}}",
+                              "b": "{{2.Today_date}}",
+                              "o": "date:greaterorequal"
+                            }
+                          ]
+                        ]
+                      },
+                      "mapper": {
+                        "scope": "roundtrip",
+                        "variables": [
+                          {
+                            "name": "Report_end_date",
+                            "value": "{{2.Today_date}}"
+                          }
+                        ]
+                      },
+                      "module": "util:SetVariables",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "variables",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Variable name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "any",
+                                "label": "Variable value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Variables"
+                          },
+                          {
+                            "name": "scope",
+                            "type": "select",
+                            "label": "Variable lifetime",
+                            "required": true,
+                            "validate": {
+                              "enum": [
+                                "roundtrip",
+                                "execution"
+                              ]
+                            }
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "scope": {
+                              "label": "One cycle"
+                            },
+                            "variables": {
+                              "items": [
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3300,
+                          "y": 600
+                        },
+                        "interface": [
+                          {
+                            "name": "Report_end_date",
+                            "type": "any",
+                            "label": "Report_end_date"
+                          }
+                        ]
+                      },
+                      "parameters": {}
+                    }
+                  ]
+                },
+                {
+                  "flow": [
+                    {
+                      "id": 181,
+                      "mapper": {
+                        "variables": [
+                          "Report_start_date",
+                          "Report_end_date"
+                        ]
+                      },
+                      "module": "util:GetVariables",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "variables",
+                            "spec": {
+                              "name": "value",
+                              "type": "text",
+                              "label": "Variable name",
+                              "required": true
+                            },
+                            "type": "array",
+                            "label": "Variables"
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "variables": {
+                              "items": [
+                                null,
+                                null
+                              ]
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3300,
+                          "y": 900
+                        },
+                        "interface": [
+                          {
+                            "name": "Report_start_date",
+                            "type": "any",
+                            "label": "Report_start_date"
+                          },
+                          {
+                            "name": "Report_end_date",
+                            "type": "any",
+                            "label": "Report_end_date"
+                          }
+                        ]
+                      },
+                      "parameters": {}
+                    },
+                    {
+                      "id": 161,
+                      "mapper": {
+                        "ca": "",
+                        "qs": [],
+                        "url": "https://hook.us2.make.com/rod4msq57dhbctv83py83rbgbxnap7tz",
+                        "data": "{\r\n  \"Report_start_date\": \"{{181.Report_start_date}}\",\r\n  \"Report_end_date\": \"{{181.Report_end_date}}\"\n}",
+                        "gzip": true,
+                        "method": "post",
+                        "headers": [],
+                        "timeout": "",
+                        "useMtls": false,
+                        "authPass": "",
+                        "authUser": "",
+                        "bodyType": "raw",
+                        "contentType": "application/json",
+                        "serializeUrl": false,
+                        "shareCookies": "[REDACTED]",
+                        "parseResponse": true,
+                        "followRedirect": true,
+                        "useQuerystring": false,
+                        "followAllRedirects": false,
+                        "rejectUnauthorized": true
+                      },
+                      "module": "http:ActionSendData",
+                      "version": 3,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "url",
+                            "type": "url",
+                            "label": "URL",
+                            "required": true
+                          },
+                          {
+                            "name": "serializeUrl",
+                            "type": "boolean",
+                            "label": "Serialize URL",
+                            "required": true
+                          },
+                          {
+                            "name": "method",
+                            "type": "select",
+                            "label": "Method",
+                            "required": true,
+                            "validate": {
+                              "enum": [
+                                "get",
+                                "head",
+                                "post",
+                                "put",
+                                "patch",
+                                "delete",
+                                "options"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "headers",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Headers"
+                          },
+                          {
+                            "name": "qs",
+                            "spec": [
+                              {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Name",
+                                "required": true
+                              },
+                              {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                              }
+                            ],
+                            "type": "array",
+                            "label": "Query String"
+                          },
+                          {
+                            "name": "bodyType",
+                            "type": "select",
+                            "label": "Body type",
+                            "validate": {
+                              "enum": [
+                                "raw",
+                                "x_www_form_urlencoded",
+                                "multipart_form_data"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "parseResponse",
+                            "type": "boolean",
+                            "label": "Parse response",
+                            "required": true
+                          },
+                          {
+                            "name": "authUser",
+                            "type": "text",
+                            "label": "User name"
+                          },
+                          {
+                            "name": "authPass",
+                            "type": "password",
+                            "label": "Password"
+                          },
+                          {
+                            "name": "timeout",
+                            "type": "uinteger",
+                            "label": "Timeout",
+                            "validate": {
+                              "max": 300,
+                              "min": 1
+                            }
+                          },
+                          {
+                            "name": "shareCookies",
+                            "type": "boolean",
+                            "label": "Share cookies with other HTTP modules",
+                            "required": true
+                          },
+                          {
+                            "name": "ca",
+                            "type": "cert",
+                            "label": "Self-signed certificate"
+                          },
+                          {
+                            "name": "rejectUnauthorized",
+                            "type": "boolean",
+                            "label": "Reject connections that are using unverified (self-signed) certificates",
+                            "required": true
+                          },
+                          {
+                            "name": "followRedirect",
+                            "type": "boolean",
+                            "label": "Follow redirect",
+                            "required": true
+                          },
+                          {
+                            "name": "useQuerystring",
+                            "type": "boolean",
+                            "label": "Disable serialization of multiple same query string keys as arrays",
+                            "required": true
+                          },
+                          {
+                            "name": "gzip",
+                            "type": "boolean",
+                            "label": "Request compressed content",
+                            "required": true
+                          },
+                          {
+                            "name": "useMtls",
+                            "type": "boolean",
+                            "label": "Use Mutual TLS",
+                            "required": true
+                          },
+                          {
+                            "name": "contentType",
+                            "type": "select",
+                            "label": "Content type",
+                            "validate": {
+                              "enum": [
+                                "text/plain",
+                                "application/json",
+                                "application/xml",
+                                "text/xml",
+                                "text/html",
+                                "custom"
+                              ]
+                            }
+                          },
+                          {
+                            "name": "data",
+                            "type": "buffer",
+                            "label": "Request content"
+                          },
+                          {
+                            "name": "followAllRedirects",
+                            "type": "boolean",
+                            "label": "Follow all redirect",
+                            "required": true
+                          }
+                        ],
+                        "restore": {
+                          "expect": {
+                            "qs": {
+                              "mode": "chose"
+                            },
+                            "method": {
+                              "mode": "chose",
+                              "label": "POST"
+                            },
+                            "headers": {
+                              "mode": "chose"
+                            },
+                            "bodyType": {
+                              "label": "Raw"
+                            },
+                            "contentType": {
+                              "label": "JSON (application/json)"
+                            }
+                          }
+                        },
+                        "designer": {
+                          "x": 3600,
+                          "y": 900
+                        },
+                        "parameters": [
+                          {
+                            "name": "handleErrors",
+                            "type": "boolean",
+                            "label": "Evaluate all states as errors (except for 2xx and 3xx )",
+                            "required": true
+                          },
+                          {
+                            "name": "useNewZLibDeCompress",
+                            "type": "hidden"
+                          }
+                        ]
+                      },
+                      "parameters": {
+                        "handleErrors": true,
+                        "useNewZLibDeCompress": true
+                      }
+                    },
+                    {
+                      "id": 182,
+                      "mapper": {
+                        "duration": "30"
+                      },
+                      "module": "util:FunctionSleep",
+                      "version": 1,
+                      "metadata": {
+                        "expect": [
+                          {
+                            "name": "duration",
+                            "type": "uinteger",
+                            "label": "Delay",
+                            "required": true,
+                            "validate": {
+                              "max": 300,
+                              "min": 1
+                            }
+                          }
+                        ],
+                        "restore": {},
+                        "designer": {
+                          "x": 3900,
+                          "y": 900
+                        }
+                      },
+                      "parameters": {}
+                    }
+                  ]
+                }
+              ],
+              "version": 1,
+              "metadata": {
+                "designer": {
+                  "x": 3000,
+                  "y": 750
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 1800,
+          "y": 450
+        }
+      }
+    }
+  ],
+  "name": "Intaact feeds to SQL mainflow_8:00AM V 1.0",
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "designer": {
+      "orphans": [],
+      "samples": "[STRIPPED \u2014 live sample data removed for security]"
+    },
+    "scenario": {
+      "dlq": true,
+      "slots": null,
+      "dataloss": false,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "roundtrips": 1,
+      "sequential": false,
+      "confidential": false,
+      "freshVariables": false,
+      "autoCommitTriggerLast": true
+    }
+  }
+}
