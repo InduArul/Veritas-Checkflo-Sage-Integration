@@ -50,11 +50,13 @@ Resolve these before coding the affected area. Owner in brackets.
   the YAML `environments[]` (default), or keep reading the Excel file? List the current env names (sample
   shows `Evergreen`; sample length = 2).
 
-- **OQ-14 [Sage/dev] Live response wire shape.** The `sage_transport` parsers are written to the
-  documented sample shapes (XML envelope; `_attributes.numremaining/totalcount`; records under the
-  object element; `returnformat=json` payload tolerated as text/array). The exact live shape (XML vs
-  JSON body, attribute key names, nesting) MUST be confirmed against a real Sage response and the
-  parsers/`xml_to_dict` validated in an integration test before go-live.
+- **OQ-14 [Sage/dev] Live response wire shape. — RESOLVED 2026-06-25 (validated live).**
+  Confirmed against real Sage (env Evergreen): the **probe** (pagesize 1, no `returnformat`) returns
+  **XML** with `data` attributes `numremaining`/`totalcount`; the **page** (`returnformat=json`)
+  returns **`Content-Type: application/json` with a top-level JSON array** of flat record dicts
+  (JSON `null` → `None`). `make_http_transport` now routes by request type + response content-type
+  (`parse_query_text` → `parse_json_query_response` for JSON pages, `xml_to_dict`+`parse_query_response`
+  for the XML probe). Login remains XML. Covered by unit tests in `tests/unit/test_sage_transport.py`.
 
 - **OQ-15 [DBA] Insert vs update split for the audit trail.** The bulk procs
   (`AddGLDetailBulk`/`AddAPBillBulk`) merge via OPENJSON and return only a total `rowcount` (if any).

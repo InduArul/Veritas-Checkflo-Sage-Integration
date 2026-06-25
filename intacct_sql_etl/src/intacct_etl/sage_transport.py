@@ -124,6 +124,46 @@ def parse_query_response(body: dict, object_name: str) -> dict:
     }
 
 
+# ---------- JSON query responses (OQ-14: returnformat=json page = JSON array) ----------
+def parse_json_query_response(text: str) -> dict:
+    """Parse a `returnformat=json` query body.
+
+    Live Sage returns a top-level JSON **array** of record dicts (Content-Type application/json) for
+    page requests. Counts (numremaining/totalcount) are NOT in this body — they come from the XML
+    probe — so they are None here. Tolerates a JSON error object or a `{"data": [...]}` wrapper.
+    """
+    try:
+        data = json.loads(text)
+    except (ValueError, TypeError) as exc:
+        return {"status_code": 200, "numremaining": None, "totalcount": None,
+                "records": None, "error": f"json parse error: {exc}"}
+    if isinstance(data, list):
+        records = data
+    elif isinstance(data, dict):
+        if data.get("error"):
+            return {"status_code": 200, "numremaining": None, "totalcount": None,
+                    "records": None, "error": str(data["error"])}
+        inner = data.get("data")
+        records = inner if isinstance(inner, list) else [data]
+    else:
+        records = None
+    return {"status_code": 200, "numremaining": None, "totalcount": None,
+            "records": records, "error": None}
+
+
+def _looks_json(text: str, content_type: str = "") -> bool:
+    if "json" in (content_type or "").lower():
+        return True
+    return text.lstrip()[:1] in ("[", "{")
+
+
+def parse_query_text(text: str, content_type: str, object_name: str) -> dict:
+    """Route a raw query response to the right parser: JSON page vs XML probe/error."""
+    if _looks_json(text, content_type):
+        return parse_json_query_response(text)
+    return parse_query_response(xml_to_dict(text), object_name)
+
+
 # ---------- transport wiring ----------
 def _object_name(xml: str) -> str:
     marker = "<object>"
@@ -146,17 +186,25 @@ def make_transport(poster, body_to_dict):
 
 def make_http_transport(endpoint: str, *, timeout: int = 60, gzip: bool = True,
                         verify: bool = True):
-    """Real adapter: POST XML to `endpoint` and parse the XML body. `requests` imported lazily."""
+    """Real adapter: POST the request and parse the response by type (OQ-14, validated live).
+
+    Sage returns XML for login and for the pagesize-1 probe (no returnformat), but a JSON array
+    (Content-Type: application/json) for `returnformat=json` page requests. The transport routes on
+    request type + response content-type. `requests` is imported lazily so unit tests need no network.
+    """
     import requests  # noqa: WPS433 (lazy: keeps unit tests driver/network free)
 
     headers = {"Content-Type": "application/xml"}
     if gzip:
         headers["Accept-Encoding"] = "gzip"
 
-    def poster(xml: str) -> str:
+    def transport(xml: str) -> dict:
         resp = requests.post(endpoint, data=xml.encode("utf-8"), headers=headers,
                              timeout=timeout, verify=verify)
         resp.raise_for_status()
-        return resp.text
+        text = resp.text
+        if "getAPISession" in xml:
+            return parse_login_response(xml_to_dict(text))
+        return parse_query_text(text, resp.headers.get("Content-Type", ""), _object_name(xml))
 
-    return make_transport(poster, xml_to_dict)
+    return transport

@@ -79,6 +79,33 @@ def test_parse_query_error():
     assert out["records"] is None
 
 
+# ---- OQ-14: returnformat=json page responses are a top-level JSON array ----
+def test_parse_json_query_response_array():
+    text = '[{"RECORDNO":"1","AMOUNT":"10.50","VENDORNAME":null},{"RECORDNO":"2"}]'
+    out = st.parse_json_query_response(text)
+    assert out["error"] is None and out["status_code"] == 200
+    assert out["records"] == [{"RECORDNO": "1", "AMOUNT": "10.50", "VENDORNAME": None},
+                              {"RECORDNO": "2"}]
+    assert out["numremaining"] is None and out["totalcount"] is None   # counts come from XML probe
+
+
+def test_parse_json_query_response_error_object():
+    out = st.parse_json_query_response('{"error":"session expired"}')
+    assert out["records"] is None and "session expired" in out["error"]
+
+
+def test_parse_query_text_routes_json_vs_xml():
+    # JSON page (Content-Type application/json) -> records from the array
+    j = st.parse_query_text('[{"RECORDNO":"1"}]', "application/json", "GLDETAIL")
+    assert j["records"] == [{"RECORDNO": "1"}]
+    # XML probe -> numremaining parsed from attributes
+    xml = ('<response><operation><result><data '
+           'count="1" totalcount="9" numremaining="8">'
+           '<GLDETAIL><RECORDNO>1</RECORDNO></GLDETAIL></data></result></operation></response>')
+    x = st.parse_query_text(xml, "text/xml", "GLDETAIL")
+    assert x["numremaining"] == 8 and x["totalcount"] == 9
+
+
 # ---- transport routing (poster + body_to_dict injected) ----
 def test_make_transport_routes_login_and_query():
     captured = {}
