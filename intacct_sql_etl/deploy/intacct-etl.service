@@ -1,0 +1,22 @@
+[Unit]
+Description=Intacct -> SQL Server ETL (one-shot run)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=intacct
+Group=intacct
+WorkingDirectory=/opt/intacct-etl
+# Secrets (Sage + SQL) live here, NOT in config.yaml. chmod 600, owned root:intacct.
+EnvironmentFile=/etc/intacct-etl/intacct-etl.env
+ExecStart=/opt/intacct-etl/venv/bin/intacct-etl --config /etc/intacct-etl/config.yaml
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/intacct-etl /var/log/intacct-etl
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

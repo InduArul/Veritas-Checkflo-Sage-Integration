@@ -3,4 +3,4 @@
 Source of truth: ../specs/. Process: ../WAVES.md. Rules: ../CLAUDE.md.
 """
 
-__version__ = "0.0.0"
+__version__ = "0.1.0"

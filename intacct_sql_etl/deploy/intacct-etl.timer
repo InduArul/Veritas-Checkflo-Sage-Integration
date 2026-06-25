@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Intacct ETL twice daily (08:00 and 17:30, system timezone)
+
+[Timer]
+# Confirm cadence/timezone with OQ-8. OnCalendar uses the system timezone:
+#   sudo timedatectl set-timezone America/Los_Angeles
+OnCalendar=*-*-* 08:00:00
+OnCalendar=*-*-* 17:30:00
+Persistent=true
+Unit=intacct-etl.service
+
+[Install]
+WantedBy=timers.target

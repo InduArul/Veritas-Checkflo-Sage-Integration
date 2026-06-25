@@ -14,6 +14,11 @@ __pycache__/
 .venv/
 venv/
 
+# build / packaging artifacts
+build/
+dist/
+*.egg-info/
+
 # Local run artifacts
 logs/
 *.log

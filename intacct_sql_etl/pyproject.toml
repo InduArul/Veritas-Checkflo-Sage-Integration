@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "intacct_sql_etl"
+version = "0.1.0"
+description = "Sage Intacct -> SQL Server ETL (Python rebuild of the Make 'Intaact feeds to SQL' family)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pyodbc>=5.1,<6",
+    "requests>=2.31,<3",
+    "PyYAML>=6,<7",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+
+[project.scripts]
+intacct-etl = "intacct_etl.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
