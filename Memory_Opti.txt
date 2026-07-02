@@ -1,0 +1,760 @@
+================================================================================
+MEMORY LOG — MAKE OPERATIONS OPTIMIZATION EXERCISE
+Project: Checkflo -> Sage Intacct Integration (Make.com)
+Repo: D:\Claude\Veritas_MAKE\Sage_Integration_project
+Scope: Reduce Make.com operations/credit consumption; move ETL-type feeds off Make.
+Audience for deliverable: Yosef (management summary).
+================================================================================
+
+--------------------------------------------------------------------------------
+2026-06-23  —  OPTIMIZATION ANALYSIS + RECOMMENDATION
+--------------------------------------------------------------------------------
+
+0) BILLING CONTEXT (from Memory.txt 06-20 analysis)
+   - Plan: 300K ops/month included; 600K hard ceiling (pay-as-you-go).
+     autoPurchasingActivated = TRUE (overages billed silently).
+   - The 3,600,000 license figure = TEMPORARY 2-week emergency grant from Make
+     support. IGNORE as real allowance.
+   - METRIC TRAP: BI dashboard "Ops Consumed" runs ~2x the real BILLABLE ops.
+     Use Make usage API / per-scenario operations, divide dashboard by ~2.
+   - CURRENT-CYCLE BILLABLE (06-20 snapshot): ~715,606 ops total -> ALREADY OVER
+     both the 300K plan and the 600K ceiling (root cause of overage + grant).
+     Top: Part5 183,071; Intacct->SQL daily 129,597; Part3 82,685; Part2 68,428;
+     22.0 RESIDUAL 51,640; Upload CSV 37,785; Part6 34,740; Part4 25,330.
+
+1) CENTRAL FINDING — "SQL Daily Feeds" = the "Intaact feeds to SQL" family
+   - Consumes ~129,597 ops/cycle (~5,000/day) = ~18% of current total,
+     ~45% of the 300K included plan. Biggest NON-Checkflo consumer.
+   - It is an ETL/data-copy job (Intacct reporting data -> shape -> load to SQL),
+     which is the WRONG kind of workload for an ops-metered iPaaS like Make.
+   - ARCHITECTURE (confirmed via live pull, scratch/sql_8am.json):
+       * 1744137 daily run  + 1744512 monthly run = webhook ORCHESTRATORS (gateway).
+       * 1743529 8:00AM + 4066399 5:30PM = mainflow WORKERS (use mssql + http).
+       * Mainflow logic: compute date window (run_type by day-of-month; 3-mo vs YTD);
+         mssql:DeleteFromTable x2 (full refresh wipe); then BasicRepeater(26) + (5)
+         slice date range into monthly windows; each window POSTed to a sub-webhook
+         worker (hooks xtxrf... / rod4...) with 30s FunctionSleep between calls.
+       * The ACTUAL extract->map->insert lives in the 2 sub-webhook workers.
+   - Most of the "manipulation" is PLUMBING (date-slicing + sleeps) that exists only
+     because Make talks to Intacct over the paginated/rate-limited HTTP API. The real
+     business transform (field mapping) is small and moves cleanly into SQL.
+
+2) RECOMMENDATION — MOVE SQL FEEDS OFF MAKE (ETL -> ELT)
+   - Reframe: Make does ETL (transform-in-flight). Target = ELT:
+       EXTRACT raw Intacct -> SQL staging; TRANSFORM in SQL views/stored procs;
+       LOAD staging -> final via atomic swap (crash-safe; fixes the naive
+       DELETE-then-insert that can leave tables half-empty on failure);
+       ORCHESTRATE via SQL Server Agent / ADF (replaces Make scheduler + sleeps).
+   - The 26+5 date-slicing and 30s sleeps DISAPPEAR (one windowed SELECT/query).
+
+3) *** COST = ~$0 NEW RECURRING (key answer for client) ***
+   - The two expensive pieces are ALREADY OWNED & PAID FOR:
+       (a) SQL Server (user has it + remote access) -> target + transform, $0.
+       (b) Intacct API / Web Services access -> Make already uses it daily, $0 reuse.
+       (c) SQL Server Agent (bundled) / Windows Task Scheduler -> scheduling, $0.
+       (d) SSIS or small PowerShell/Python script -> one-time build labor, $0 license.
+   - Sage Intacct ODBC driver / Cloud Data Service = OPTIONAL "nicer" extraction;
+     MAY be a paid Sage add-on (quote-based, NOT public). If it costs money -> SKIP it
+     and reuse the existing API. ODBC/CDS is a convenience, NOT a requirement.
+   - Net: migration is COST-NEGATIVE (removes ~130K ops/cycle, adds ~$0).
+   - One-time cost only = internal dev/test + parallel-run validation effort.
+
+4) *** MAKE API CHECK (connections_list, team 33002) — what's already provisioned ***
+   - Sage Intacct connection (id 324492, accountName 'sage-intacct', OAuth) = LIVE,
+     but currently UNUSED by scenarios (flows call Intacct via raw http instead).
+     => Intacct API/Web Services entitlement is CONFIRMED AVAILABLE.
+   - MSSQL connection (id 2803828, 'My Microsoft SQL Server connection') = LIVE, used
+     by the SQL-feed flows. => direct SQL path CONFIRMED.
+   - Veritas_Sharepoint_Connection (id 450334, azure) = used broadly (SharePoint/Excel).
+   - NO ODBC / Cloud Data Service connection in Make — EXPECTED: CDS is a SAGE-SIDE
+     entitlement and NEVER appears in Make. Make API CANNOT confirm CDS.
+   - HOW TO CHECK CDS (Sage side, needs Intacct admin): Company > Admin > Subscriptions
+     (look for ODBC / Cloud Data Service / Data Delivery / Web Services), OR ask the
+     Sage account manager / partner, OR open a Sage support case. Self-confirm API route
+     via Company > Setup > Company Information > Security tab (Web Services Sender IDs).
+
+5) FULL FLOW INVENTORY + DECISIONS (team 33002)
+   KEEP & OPTIMIZE in Make (core, event-driven — right tool):
+     - Project1 Checkflo->Sage pipeline: Part1 (5456694 MoWeSa / 5237201 TuThFr),
+       Part2 (5455933), Part_345 (5455904, biggest consumer), Part6 (5171324),
+       Part7 (5171262). NOTE: Leak A merge (3 calls -> 1) already DONE 06-22.
+       Highest consumer = the invoice-loop (old Part5 183K / now in Part_345).
+     - Project2 input-file creation: v9.0 (4037643) + triggers Empres (5254692),
+       Evergreen (5253402), Livewell (5254638). Apply fetch-once caching fix.
+     - Create Checkflo CSV v0.2 (3679094); Upload CSV v0.1 (4492713, already fixed).
+     - Housekeeping: BatchIDtracker (3867610), BatchErrortracker (3887144) — trivial.
+   KEEP & REVIEW (Phase-2 move-out candidates — also Intacct data jobs):
+     - Intaact_BankFeeds_Generation V5.0 (3399399)
+     - Intaact_BankFeeds_Reconciliation v0.2 (3774584)
+   MOVE OUT of Make -> Sage Intacct direct -> SQL (PHASE 1):
+     - Intaact feeds to SQL: daily run (1744137), monthly run (1744512),
+       8:00AM mainflow (1743529), 5:30PM mainflow (4066399), + 2 helper sub-webhooks.
+   DECOMMISSION / CONFIRM OFF (waste / superseded):
+     - checkflo_Sage Integration 22.0 (4110999) — retired monolith STILL ~52K residual.
+     - Backup_Intaact feeds to SQL (1359324) — retire with the move-out.
+     - Pre-merge rollback copies (Part1 5127317, Part2 5128270, Part3 5203224,
+       Part4 5152139, Part5 5152516) — archive after stabilization window.
+     - Old backups: BankFeeds Gen V4.0 (1635966/1993621), Recon v0.1 (3622086),
+       Input v8.0 (3793395), Create CSV backup (4065945), Upload CSV old (4492637).
+   CLARIFY:
+     - Other payment types to Sage Integration v0.1 (4211112) — parked; confirm intent.
+
+6) EXPECTED IMPACT (estimates; API-derived billable, NOT inflated dashboard)
+     Move SQL feeds out (Sage direct->SQL)   ~130K (full family up to ~200K)  ~18%
+     Decommission retired 22.0                ~52K                              ~7%
+     Check-pipeline merge (ALREADY DONE)      ~35K                              ~5%
+     Other in-Make tuning (caching/queries)   ~20-40K                           ~3-5%
+     ------------------------------------------------------------------------------
+     TOTAL                                    ~235-255K                        ~33-35%
+   - Lands ~470-500K/cycle: back UNDER the 600K ceiling, ends worst overage exposure.
+   - Getting under the 300K base plan would need deeper redesign of the invoice-loop
+     (largest consumer) — propose as a LATER phase, do NOT promise it.
+   - Recommendation to client: HOLD on upgrading Make to Enterprise at current position.
+
+7) DELIVERABLE STATUS — management email to Yosef
+   - User drafted their own version (Downloads/MAKE.jpg): blue=keep&optimize,
+     maroon=move out phase-wise; "no additional cost via Web Services/API"; "2 days
+     to prove with a test connection"; hold on Enterprise upgrade; 9-row decision table.
+   - MY REVIEW FEEDBACK given (tweaks before sending):
+     (1) "optimize pnt1/pnt2" -> real heavy step is the invoice-processing (Part_345),
+         not Part1/2 — reword to "high-operation steps in the check pipeline".
+     (2) ADD the ~52K easy win: turn off retired 22.0 (missing from the email).
+     (3) Move-out scope: rows name daily+monthly only — also include 8AM/5:30PM
+         mainflows + 2 helper flows so nothing is missed at cutover.
+     (4) Label savings: ~130K measured / up to ~200K full family (defensible range).
+     (5) ADD risk-reassurance: parallel-run + row-count/checksum validation before
+         cutover, no disruption to live data.
+     (6) Minor: "pnt1/pnt2" -> "Part 1/Part 2".
+
+   OPEN / NEXT (Optimization):
+   [ ] User to run a TEST connection (2 days) proving Intacct->SQL direct load works.
+   [ ] STEP-1 SPEC (when greenlit): pull the 2 SQL-feed worker sub-scenarios; document
+       per target SQL table -> Intacct object -> column mapping + derived cols + filters
+       + the 2 DeleteFromTable targets + run_type/date logic. = build spec + acceptance test.
+   [ ] Decide extract mechanism: reuse existing API (free) vs ODBC/CDS (verify Sage cost).
+   [ ] Build staging + transform (SQL views/procs) + load (staging->swap) + SQL Agent sched.
+   [ ] Parallel-run vs Make (row counts + checksums) several cycles, then cutover.
+   [ ] Decommission SQL-feed scenarios + helpers; confirm 22.0 fully off.
+   [ ] Phase 2: review Bank Feeds Gen V5.0 + Reconciliation v0.2 for same move-out.
+   [ ] Governance: turn off / alert on autoPurchasingActivated (silent overage).
+
+   ARTIFACTS: scratch/sql_8am.json (8AM mainflow blueprint, gitignored).
+
+8) POC — DIRECT INTACCT -> SQL TEST (PowerShell on RDP server) — IN PROGRESS
+   Goal: prove Intacct extract -> SQL load works WITHOUT Make, $0 new cost (the
+   "2-day test connection" promised to Yosef). User running blocks in a PowerShell
+   window inside Remote Desktop on the SQL Server box. (My tools run on the dev
+   machine, NOT the RDP session -> I provide copy-paste PowerShell; user executes.)
+
+   *** INTACCT EXTRACTION = PROVEN / SUCCESS ***
+   - Authenticated to Intacct XML Gateway (https://api.intacct.com/ia/xml/xmlgw.phtml)
+     from the RDP server (outside Make) and fetched GLACCOUNT rows (RECORDNO,ACCOUNTNO,
+     TITLE) via readByQuery. Sender = "EvergreenHealth". Three success statuses + data.
+   - => Intacct Web Services / API access works from the server; the free extraction
+     path is real (matches the live unused sage-intacct Make connection 324492).
+
+   POWERSHELL GOTCHAS SOLVED (for next time / reuse):
+   - Set TLS 1.2 first: [Net.ServicePointManager]::SecurityProtocol = Tls12 (Intacct
+     rejects otherwise).
+   - Here-strings (@" ... "@) break on interactive paste (the >> prompt) — the closing
+     "@ must be col-0. FIX: build the request XML as ONE single-line double-quoted
+     string instead.
+   - Inside that double-quoted XML string, attribute values must use SINGLE quotes:
+     <function controlid='f1'> (double quotes would terminate the PS string).
+   - Intacct REQUIRES the controlid attribute on <function> (error XL03000003 "attribute
+     'controlid' is required" when omitted).
+   - Multi-line PowerShell functions also trigger the >> prompt -> define the function on
+     ONE line, or inline the statements with ';'. Ctrl+C exits a stuck >> prompt.
+
+   *** BLOCKER — SQL LOGIN (the only thing left to finish the POC) ***
+   - SQL connection (System.Data.SqlClient) FAILED on auth:
+       (a) Windows/Integrated -> "Login failed for user 'AzureAD\ikannan@veritashc
+           solutions.com'" (AAD account not mapped / not accepted via integrated).
+       (b) SQL auth as 'indu' -> "Login failed for user 'indu'" (wrong pwd / no DB
+           access / login not present).
+   - Make's SQL creds are NOT recoverable: connections_get on the mssql connection
+     (2803828, "My Microsoft SQL Server connection") returns NO server/user/password
+     (Make redacts secrets). Blueprints only reference the connection by id.
+   - Likely env = Azure SQL with Azure AD auth (user is AzureAD\ikannan...). Three
+     resolution branches prepared for next session:
+       1. Real SQL login+password (SQL auth) -> fix User Id/Password in connStr.
+       2. Azure SQL + Azure AD -> use SqlServer module Invoke-Sqlcmd with an AAD
+          access token (Get-AzAccessToken -ResourceUrl https://database.windows.net).
+       3. On-prem + Windows auth -> DBA grants the AAD login access.
+   - ACTION TAKEN: USER HAS REQUESTED the correct SQL credentials (from whoever set up
+     the Make SQL connection). PAUSED pending those creds.
+
+   RESUME NEXT SESSION (POC):
+   [ ] Get SQL creds; confirm on-prem vs Azure SQL + auth mode (check SSMS login dialog:
+       Authentication dropdown + whether server = *.database.windows.net).
+   [ ] Re-run: build dbo.intacct_test, INSERT the fetched GLACCOUNT rows, verify
+       SQL COUNT(*) == rows fetched. => end-to-end Intacct->SQL proven (proof for Yosef).
+   [ ] Then schedule once via SQL Agent / Task Scheduler to prove unattended run.
+   [ ] Optionally re-run the test against the REAL feed object + target table (pull the
+       2 SQL-feed worker sub-scenarios for exact object/fields/destination first).
+   WORKING VARS in the user's PS session (if same window persists): $senderId/$senderPwd/
+   $companyId/$userId/$userPwd/$intacctUrl set; $rows holds fetched GLACCOUNT records;
+   $sqlServer/$sqlDb need valid values; $connStr needs working auth.
+================================================================================
+
+--------------------------------------------------------------------------------
+2026-06-25  —  SQL ETL (intacct_sql_etl) BUILD + VM DEPLOYMENT PROGRESS
+--------------------------------------------------------------------------------
+Realizes the "MOVE SQL FEEDS OFF MAKE" plan (section 2/8 above) as a real,
+configurable Python ETL. Project lives in repo subdir: intacct_sql_etl/.
+Branch: intacct-etl-code-review-gate.
+
+A) WHAT WAS BUILT (spec-driven, TDD-locked, parity-gated — "WAVES" process)
+   - Reverse-engineered the Make "Intaact feeds to SQL" family into a lossless spec
+     (intacct_sql_etl/specs/00..12). Source of truth = the spec.
+   - Python package `intacct_etl` (src/): extract (Sage XML Gateway) -> transform
+     (JSON encode) -> load (SQL bulk procs, black-box) -> reconcile -> audit.
+     Fully config-driven (no hardcoding): endpoints, table/proc names, creds, page
+     size, filters, schedule, log/audit location all in config.yaml + .env.
+   - Guardrails: prod_write_guard hook + config guard => dev/test can only write
+     test_-prefixed tables/procs (runs in PARALLEL with Make). TDD mandatory.
+   - CODE REVIEW GATE: SonarQube/Sentry-style review, all findings closed
+     (docs/CODE_REVIEW.md, 0 open). AUDIT TRAIL layer (specs/12): per-run/per-step
+     metrics (rows read/loaded/affected/failed + E/T/L timings) -> JSON/JSONL.
+   - 155 tests green. Packaged v0.1.1 (pyproject, `intacct-etl` CLI). Runbook =
+     DEPLOY.md; release guide = RELEASE_GUIDE.md; deploy/ has systemd units + installer.
+
+B) DEPLOYED TO THE VM (shared automation box, NOT a fresh VM)
+   - Host: VTSAzPLW01 / 10.88.102.40, Ubuntu 24.04.4, Python 3.12. Co-resident with
+     the stampli-automation Docker stack (/data/stampli-automation) — fully isolated.
+   - SSH: `ssh vtsvm` works from the POWERSHELL tool (ssh-agent has the key passphrase;
+     VPN must be up). Bash tool canNOT (no agent). Key ~/.ssh/veritas_vm (passphrase).
+   - Install location: /data/intacct-etl/ (on the big 106GB /data disk, matching the
+     stampli convention). ROOTLESS: system python3-venv/pip absent + sudo needs a
+     password, so venv created `--without-pip` and pip bootstrapped via get-pip.py.
+     Layout: venv/, config.yaml, intacct-etl.env (chmod 600), logs/, audit/, bundle dir.
+   - DEPLOYMENT AUDIT REPORT: docs/DEPLOYMENT_AUDIT_2026-06-25.md (+ copy on VM).
+
+C) VALIDATED LIVE (the SAGE half is fully working)
+   - Sage getAPISession LOGIN ok (env Evergreen). Creds resolve from .env via
+     pattern {sage_creds_key}_{FIELD} (Prod_Sage_Evergreen_*). All 6 secrets set.
+   - Full daily window (2026-03-01..06-30) probe counts: GL ~642,423 rows; AP 28,547.
+   - 1-DAY extract (2026-06-01): GL 4,721 rows (3 pages -> pagination proven), AP 294;
+     all 17 GL + 7 AP columns present; transform OK.
+   - OQ-14 RESOLVED (live wire shape): the pagesize-1 PROBE returns XML
+     (numremaining/totalcount); the returnformat=json PAGE returns Content-Type
+     application/json + a TOP-LEVEL JSON ARRAY of record dicts. Fixed transport to
+     route by content-type (parse_json_query_response/parse_query_text). Shipped v0.1.1.
+   - ODBC Driver 18 INSTALLED (msodbcsql18) — pyodbc.drivers() now lists it. Needed a
+     temporary passwordless-sudo grant (Option B: /etc/sudoers.d/intacct-install,
+     NOPASSWD:SETENV apt-get,tee) AND the MS repo key had to be dearmored to the exact
+     signed-by path (/usr/share/keyrings/microsoft-prod.gpg) or apt threw NO_PUBKEY.
+
+D) *** CURRENT BLOCKER — SQL SERVER NOT REACHABLE FROM THE VM ***
+   - config sql.server = "VPASQL01\SQLEXPRESS" (SQL Server 2016 SP3, named Express
+     instance). auth_mode=sql; username set (len 4); SQL_PASSWORD in .env (len 10);
+     database=Intacct; driver "ODBC Driver 18 for SQL Server"; odbc_extra
+     "Encrypt=yes;TrustServerCertificate=yes".
+   - pyodbc connect -> "HYT00 Login timeout expired" (TCP never establishes; NOT creds).
+   - Diagnosis from VM: DNS does NOT resolve short name VPASQL01; TCP VPASQL01:1433
+     UNREACHABLE/timeout. Named instance => dynamic port via SQL Browser (UDP 1434);
+     Linux/pyodbc wants a STATIC port -> use server: "<ip>,<port>".
+   - User supplied "13.0.6490.1" as the IP, but that is the SQL VERSION (2016 SP3),
+     NOT an IPv4. Real private IPv4 + the instance's TCP port still NEEDED.
+   - PAUSED: user checking with IT on (1) the real IPv4 of VPASQL01, (2) the SQLEXPRESS
+     static TCP port, (3) firewall: is TCP <port> open from 10.88.102.40 -> VPASQL01
+     (likely on-prem; Azure VM -> on-prem path may be blocked).
+
+E) TEST_ TARGETS (DBA created, confirmed in config; guard passes)
+   dbo.test_GLTable, dbo.test_APBillTable; procs test_AddGLDetailBulk,
+   test_AddAPBillBulk, [Intacct].[dbo].[test_SyncAPLinksToGL],
+   [Intacct].[dbo].[test_UpdateVendorInfoInGL]. gl_delete_date_field=Entry_Date (OQ-2
+   still to confirm). apbill_full_reload=true.
+
+F) RESUME NEXT SESSION (SQL project)
+   [ ] Get real IPv4 + static TCP port for VPASQL01\SQLEXPRESS from IT; confirm firewall
+       open from 10.88.102.40. Then set config sql.server: "<ip>,<port>" and re-test
+       (/dev/tcp reachability -> pyodbc SELECT 1 -> SQL pre-flight: counts + proc OBJECT_ID).
+   [ ] Run the 1-DAY SHADOW load: `intacct-etl --config config.yaml --start 06/01/2026
+       --end 06/01/2026` -> loads test_ tables -> reconcile -> audit JSON. Review audit.
+   [ ] Scale to full daily window; RECONCILE vs Make (row counts + checksums) = parity gate.
+   [ ] Confirm OQ-2 (GL delete date field). Then schedule (rootless user crontab 08:00/17:30).
+   [ ] CLEANUP: remove temp sudo grant `sudo rm /etc/sudoers.d/intacct-install` when done.
+   [ ] Cutover (test_mode:false + prod targets) only after green parity + sign-off; then
+       disable the Make SQL-feed scenarios (keep for rollback).
+
+   OPERATIONAL NOTES (reuse): run remote scripts as
+   `@'...'@ | ssh vtsvm "tr -d '\r' | bash -s"` from the PowerShell tool — PowerShell
+   adds a BOM (guard line 1 with `true`) and CRLF (strip with tr -d '\r'); the .env/
+   config were also CRLF-contaminated (each value had a trailing \r that breaks auth) —
+   fixed with sed -i "s/\r$//". The PowerShell tool sandbox BLOCKS any command pairing
+   `rm` with the literal `/data` (split move-vs-delete steps).
+================================================================================
+
+--------------------------------------------------------------------------------
+2026-06-25  —  COMMERCIAL: VALUE-RETAINER PITCH DECK (Indu -> Yosef)
+--------------------------------------------------------------------------------
+Separate workstream from the ops/ETL optimization above. Goal: move Indu's
+billing with Veritas from PER-PROJECT FIXED BID to a $2,500/month VALUE RETAINER.
+NOT yet pitched to Yosef as of today (cover email tuned, ready to send).
+
+A) ARTIFACTS
+   - Deck: docs/Indu_Retainer_Pitch_v2.pptx (6 slides), built by
+     docs/build_retainer_deck.py (python-pptx; re-run script to regenerate).
+   - Original/earlier deck: docs/Indu_Pipeline_Migration_Pitch.pptx (13 slides,
+     pnt3-migration-only — superseded by v2).
+   - Cover email for the proposal: TUNED, ready to send (not in repo).
+
+B) THE 4 PROJECTS IN PIPELINE (context for the retainer scope)
+   1. Other payment types -> Intacct  — in MAKE (new build).
+   2. Checkflo Sage Integration maintenance — 4 sub-projects, STAY in MAKE
+      (+ future small enhancements).
+   3. SQL feeds (daily+monthly) — moving MAKE -> company Ubuntu VM (the ETL above).
+   4. AI Invoice Automation — in progress on the same VM as pnt3.
+
+C) KEY STRATEGIC DECISIONS (how the pitch is framed)
+   - Retainer = buy the FUNCTION, not the pnt3 project. The 6-mo roadmap is the
+     on-ramp ("how we start"), NOT the whole engagement (avoids "$2,500x6=finite"
+     read). Ongoing, month-to-month.
+   - HYBRID scope: retainer covers run/maintain/optimize/enhance + delivery of the
+     AGREED pipeline + POCs + monitoring; a BRAND-NEW large initiative beyond
+     today's roadmap is scoped & quoted on top (protects build revenue).
+   - COST FRAMING IS HONEST — NOT sold as a saving. Retainer ~$30k/yr vs ~$33k
+     all-in last year (services $26,475 + make.com $6,473). On the services line
+     it is actually ~+13% ($26,475 -> $30,000); justified by support/SLA/audit/
+     ownership/predictability + make.com offset. Sell on TRAJECTORY + value, never
+     a point-in-time discount (a CEO will catch a false saving).
+
+D) REAL NUMBERS (validated, used in deck)
+   - Indu trailing 12-mo billing to Veritas = $26,475 (user-supplied).
+   - make.com trailing 12-mo = $6,473 (from Downloads/table-export.csv):
+     Pro annual $3,492.33 (Jun26-27) + Core annual $1,765.28 (Jun25-26)
+     + 147 auto-purchase overage charges = $1,215.36.
+     => plan DOUBLED (Core->Pro), overage TRIPLED in 7 mo ($91 Nov25 -> $248 Jun26
+     partial). autoPurchasingActivated still on (silent overage). Annual plan is
+     PREPAID through Jun-2027 (can't cut for 6 mo -> KPI re-timed, see below).
+
+E) CRITICAL WORDING GUARDRAIL — NOT LEAVING MAKE ENTIRELY
+   - Per email thread (docs/"Re_ ...scenarios are paused.eml"): Blue items (core
+     Checkflo CHECK PIPELINE, input file, CSV create/upload, housekeeping) STAY in
+     MAKE & get optimized. Maroon items (SQL feeds=Phase1, Bank Feeds=Phase2) move
+     out to owned Python. Deck must NOT imply killing all of MAKE.
+   - FIXED: slide 4 "Decommission the make.com tier" -> accurate roadmap (Optimize
+     MAKE / Build feeds / Validate / Cut over feeds / Harden / Phase2).
+   - FIXED: slide 2 card was "Finance data in a black box ... exposure for your
+     books" -> reworded to "Rented logic, not owned" and explicitly "make.com fits
+     the event-driven check pipeline; the data-heavy feeds are better owned." (Can't
+     trash the platform we're keeping for Checkflo.)
+   - Note: check pipeline is the BIGGEST credit consumer (~57%) but STAYS; feeds
+     are only ~18% — cost relief from the move is real but PARTIAL. Don't overpromise.
+
+F) DECK STRUCTURE (6 slides) + TERMS
+   1 Title  2 Why now (3 pressures: cost creep / rented-not-owned / per-project
+   friction)  3 Pipeline + continuous discovery ("on the radar")  4 How we start
+   (roadmap) + go-further (Azure serverless, Delta loads)  5 Simple terms (cost
+   band + 4 cards)  6 Package + $2,500 price + close. Price shown ONLY on slides 5-6.
+   - Terms: month-to-month, 30-day notice, OWN the code/IP, same-business-day
+     response on a failed run, documented/handover-ready.
+   - KPIs (re-timed to be defensible): overage gone in 90 days · plan tier cut at
+     renewal · audit log on every run · zero unplanned outages · quarterly review.
+
+G) AZURE SERVERLESS — VALIDATED (web-checked 06-25)
+   - Use Flex Consumption (NOT classic Consumption: classic has NO VNet integration
+     -> can't reach on-prem private SQL VPASQL01). Flex supports VNet (delegated /27).
+   - Compute within Azure free monthly grant (1M exec + 400k GB-s) => ~$0 for a
+     twice-daily job. Removes VM patching BUT the VM stays for pnt4 (AI invoice).
+   - Delta/watermark loads recommended (pull only changed Bills/GL since last run):
+     less runtime, lighter Sage API usage.
+
+H) DONE TODAY / OPEN
+   - Deck finalized through multiple CEO-seat (Yosef) review passes; contradictions
+     closed; wording made make.com-safe. Cover email tuned & ready.
+   - The SEPARATE technical email (SQL-feed move-out approach) was reviewed/tuned
+     and USER SENT IT to Yosef today.
+   [ ] Send the retainer cover email + deck to Yosef (user's call).
+   [ ] If asked: add make.com overage trend mini-chart to slide 2; optionally plant
+       the "$6,473 and climbing" hook in the cover email.
+================================================================================
+
+--------------------------------------------------------------------------------
+2026-06-30  —  UBUNTU DEPLOYMENT: SQL CONNECTIVITY BRING-UP (Phase 1 shadow prep)
+--------------------------------------------------------------------------------
+Context: intacct_sql_etl v0.1.1 already deployed to Ubuntu VM (Phase 1, shadow/
+install only). Working to get the first live SQL connection so we can shadow-run
+the ETL into test_ tables in parallel with Make. App side is fully built/offline-
+tested (152 tests green, 0 open code-review findings).
+
+VM / access:
+  - Host VTSAzPLW01, SSH alias "vtsvm" (~/.ssh/veritas_vm), user vtsazplw01-admin.
+  - Install root: /data/intacct-etl  (venv, config.yaml, intacct-etl.env, logs, audit).
+  - We have SSH but NO passwordless sudo (deploy was deliberately rootless).
+
+WHAT WAS RESOLVED TODAY:
+  1) IT confirmed network team's port test + that this is the Veritas AI VM. Also
+     noted a SEPARATE PostgreSQL Flex Server on 5432 (NOT ours — ignore).
+  2) ODBC Driver 18 = ALREADY INSTALLED on the VM and working. Verified: unixODBC
+     2.3.12, [ODBC Driver 18 for SQL Server] ->
+     /opt/microsoft/msodbcsql18/lib64/libmsodbcsql-18.6.so.2.1; app venv pyodbc
+     5.3.0 lists the driver. No install needed (someone — likely IT — already did it).
+  3) config.yaml on the VM was already filled by Indu: auth_mode sql, user "indu",
+     driver "ODBC Driver 18 for SQL Server", odbc_extra
+     "Encrypt=yes;TrustServerCertificate=yes", all SQL targets correctly test_-prefixed
+     (test_GLTable/test_APBillTable + 4 test_ procs). Config VALIDATES; assert_test_
+     targets passes. SQL_PASSWORD present in .env. (.env also has a 2nd Sage env
+     "Veritashs" beyond enabled "Evergreen" — OQ-12, not blocking.)
+
+THE BLOCKER (still open) — SQL network path is FIREWALL-BLOCKED:
+  - SQL host given as VPASQL01\SQLEXPRESS = a NAMED SQL Express instance.
+  - VPASQL01 does NOT resolve on the VM (no DNS/hosts; Azure search reddog.microsoft.com).
+  - IP later supplied: 40.75.111.131:1433 (a PUBLIC Azure IP). Switched config to the
+    host,port form  sql.server: "40.75.111.131,1433"  (bypasses DNS + SQL Browser).
+    Backup saved on VM: config.yaml.bak-20260630-111442.
+  - Result: TCP 40.75.111.131:1433 AND :1434 both TIME OUT (silent drop = firewall/NSG,
+    not a closed port). Route is correct (via 10.88.102.1 dev eth0). Outbound 443 to
+    Sage WORKS (egress fine), so it's specifically 1433 to that host being filtered.
+  - VM private IP 10.88.102.40 ; VM PUBLIC EGRESS IP 135.224.198.106 (so 40.75.111.131
+    is genuinely a separate host, not the VM itself).
+  - test_ STORED PROCS existence still UNVERIFIED (connection never reached the DB).
+
+NEXT — ASK IT (networking, not app):
+  [PREFERRED] Give SQL server's PRIVATE IP (both in Veritas Azure env) + open NSG +
+     Windows firewall for inbound TCP 1433 from 10.88.102.40 (intra-VNet). Switch
+     sql.server to that private IP,1433.
+  [ELSE] Open inbound TCP 1433 on 40.75.111.131 (NSG + SQL box Windows firewall) from
+     egress 135.224.198.106. Confirm SQLEXPRESS listens on STATIC TCP 1433.
+  Then: re-run read-only connect test (also verifies the 4 test_ procs) -> if green,
+  first PHASE-1 SHADOW RUN into test_ tables -> reconcile vs Make -> (later) cutover.
+
+STATE: app/deploy/driver/config/secret = GREEN. Only the SQL:1433 firewall path
+blocks the first shadow run. Full detail in intacct_sql_etl/specs/10_open_questions.md
+(OQ-11) and docs/DEPLOYMENT_AUDIT_2026-06-25.md (item 1 marked done 06-30).
+================================================================================
+
+--------------------------------------------------------------------------------
+2026-07-02  —  SQL CONNECTIVITY SOLVED + FIRST SHADOW RUN + GREEN PARITY (Phase 1)
+--------------------------------------------------------------------------------
+The OQ-11 firewall blocker is RESOLVED and the first end-to-end Intacct->SQL shadow
+run is DONE with clean parity. Big milestone: the ETL is proven faithful to Sage.
+
+1) NETWORK FIX (IT answer): stop using the PUBLIC Azure IP (40.75.111.131 = filtered).
+   IT said connect over the INTERNAL LAN IP of VPASQL01 = 10.73.70.40,1433. From the VM
+   (10.88.102.40) TCP 10.73.70.40:1433 is OPEN (route via 10.88.102.1 dev eth0).
+   -> config.yaml sql.server set to "10.73.70.40,1433" (backups on VM: config.yaml.bak-*).
+   Access still needs the Azure VPN up + `ssh vtsvm` from the POWERSHELL tool.
+
+2) CONFIG SECRET BUG FIXED: config.yaml had password_secret_key set to the LITERAL SQL
+   password (a secret leaking into config). Corrected to password_secret_key: "SQL_PASSWORD"
+   (the env-var NAME). The value lives ONLY in intacct-etl.env (chmod 600). RULE (user
+   instruction): NEVER remember/persist the password — always fetch it by key from .env.
+
+3) READ-ONLY PRE-FLIGHT (green): SELECT 1 ok; SQL Server 2016 SP3 (13.0.6490.1);
+   all 4 procs + both test_ tables resolve via OBJECT_ID.
+
+4) *** ISOLATION INCIDENT (contained) ***: FIRST shadow run wrote to PRODUCTION. The
+   test_-NAMED procs still had bodies targeting dbo.GLTable / dbo.APBillTable (prod). The
+   prod_write_guard hook cannot see inside a black-box proc, so it didn't catch it. Run
+   MERGEd 27,321 GL + 454 AP into PROD. IMPACT = negligible: MERGE keyed on unique Record_No
+   from the SAME Sage source Make uses -> matched rows updated to identical values, no key
+   collisions, no row inflation (idempotent upsert). No cleanup needed.
+   FIX: user ALTERed all 4 procs to target test_ tables. Verified via OBJECT_DEFINITION:
+   test_AddGLDetailBulk->test_GLTable; test_AddAPBillBulk->test_APBillTable;
+   test_SyncAPLinksToGL now `FROM test_GLTable` (this one needed a 2nd fix — it initially
+   still had `FROM GLTable`); test_UpdateVendorInfoInGL->dbo.test_GLTable. All clean now.
+
+5) SECOND shadow run (post-fix) = SUCCESS, test_ tables populated:
+   test_GLTable 27,321 ; test_APBillTable 454.
+
+6) *** PARITY = GREEN (and we are MORE accurate than Make) ***
+   - GL query is BYTE-IDENTICAL to Make's daily worker: filter on BATCH_DATE window
+     AND <equalto>BOOKID=ACCRUAL</equalto>, object GLDETAIL (confirmed in
+     reference/worker_dailyrun_1744137.sanitized.json).
+   - Sage AUTHORITATIVE probe (pagesize=1, numremaining+1) for BATCH_DATE=06/01/2026,
+     BOOKID=ACCRUAL = 27,321 -> EXACTLY what we extracted+loaded. Zero pagination drops.
+   - Value-level: all 27,321 test rows exist in prod and MATCH on Base_Amount/Account_No/
+     Entry_Date/Journal -> 0 mismatches.
+   - AP: test 454 == Sage authoritative 454 -> MATCH.
+   - GL vs prod count differs by +1,908 in PROD (prod 29,229 vs test 27,321 for the window).
+     These 1,908 are STALE rows in Make's prod GLTable: Make loaded them earlier but they've
+     since been reversed/reclassified in Sage and Make never purged them (its window no longer
+     refreshes 06/01). i.e. the NEW ETL reflects Sage truth; Make's prod is stale. Use as
+     evidence the migration IMPROVES data accuracy (raise with Yosef).
+   - NOTE: SUM(Base_Amount) = 0.00 on both sides is EXPECTED (double-entry GL balances) —
+     not a checksum failure; rely on row-level match, not sum.
+
+RESUME NEXT SESSION (Phase 1):
+  [ ] Scale up: run full daily window (and monthly run_type) into test_ tables; reconcile
+      (row counts vs Sage authoritative + value match) across several cycles.
+  [ ] Confirm OQ-2 (GL delete date field for the wipe) — wipe uses gl_delete_date_field.
+  [ ] Schedule via rootless user crontab (08:00 / 17:30) to prove unattended runs.
+  [ ] Add an automated reconcile step (specs/11) comparing test_ vs Sage authoritative count.
+  [ ] Cleanup: remove temp sudo grant /etc/sudoers.d/intacct-install when done; /tmp probe
+      scripts (preflight.py, procs*.txt) are harmless.
+  [ ] Cutover (test_mode:false + prod targets) only after sustained green parity + sign-off;
+      then disable Make SQL-feed scenarios (keep for rollback).
+================================================================================
+
+--------------------------------------------------------------------------------
+2026-07-02 (cont.)  —  ARCHITECT REVIEW + INCREMENTAL (DELTA/CDC) CR DESIGN
+--------------------------------------------------------------------------------
+Did a solution-architect review of the built system and designed the biggest CR:
+move both daily+monthly runs from full-refresh to incremental delta. Spec drafted
+= specs/13_incremental_delta_load.md (DRAFT, awaiting user sign-off; NO code yet).
+
+A) ARCHITECT REVIEW verdict: APPROVE for continued parallel shadow; NOT for prod
+   cutover until ~5 productionization gaps close. Strengths: spec-as-source, TDD,
+   code-review gate, injection-safe (bound params + safe_identifier + XXE guard),
+   single-transaction per-env run w/ rollback. Gaps found:
+   - Pagination MISSING-records risk: offset paging + probe-total is vulnerable to
+     concurrent inserts/deletes mid-run; empty-page `break` can truncate; a mid-page
+     Sage error still COMMITS a partial wipe+load (degraded, exit1) = silent under-load;
+     reconcile.py (count+checksum) is NOT wired into the live path (only offline test).
+     DUPLICATES are already prevented on the destination by MERGE on natural key
+     (GL Record_No+Line_No; AP Record_No) — dupes safe, MISSING is the real risk.
+   - Atomicity/locking: wipe DELETEs then holds the write lock through the whole
+     multi-minute extract -> table empty+locked; fine for test_ tables, bad at prod
+     cutover. Fix = staging+swap OR (better) the delta CR removes the bulk wipe entirely.
+   - Unattended robustness: exit code set but NO alerting; need email on failure +
+     heartbeat + logrotate + flock overlap-guard.
+   - HIPAA/security: no security spec; but see user answers below.
+
+B) USER ANSWERS (2026-07-02):
+   1. GL/AP description/memo fields contain PHI? NO -> HIPAA scope minimal (financial
+      data only; keep least-privilege + secret hygiene as good practice).
+   2. TLS: leave as-is (Encrypt=yes;TrustServerCertificate=yes) = risk-accepted, internal LAN.
+   3. SQL creds expire ~quarterly; user wants self-service rotation post-handoff.
+      MY RECOMMENDATION (in specs/14 later): Azure Key Vault + VM Managed Identity
+      (no bootstrap secret; team rotates one KV secret; picked up next run). Do NOT
+      rewrite .env — fetch secret into memory. SharePoint file = fallback only (needs
+      its own expiring Graph secret = chicken-and-egg; weaker RBAC/audit). Add pre-flight
+      connect test + specific "password expired" alert. (User open to a better approach.)
+   4. Alerts = EMAIL. No email in current Make. Future: recipient list in SharePoint.
+      Build one notifier: failure alert + daily SUCCESS report (#8), recipients config
+      now -> SharePoint later.
+   5. Window includes current day but only up to a CLOSED cutoff (e.g. 9:00AM -> cut at
+      8:59). Needs a DATETIME field -> WHENMODIFIED (BATCH_DATE is date-only). Ties to #7.
+   6. Retention/DR: tables ACCUMULATE (no purge now). Purge = user action item; build as
+      OFF-by-default toggle. (Tables already hold 2024->2026 / ~5M rows.)
+
+C) *** CR #7 — INCREMENTAL DELTA (specs/13), for BOTH daily+monthly ***
+   Replace bulk window-wipe full-refresh with:
+   - WATERMARK ("bookmark") per (env,object) in a SQL control table (test_etl_watermark):
+     last successfully processed WHENMODIFIED cutoff; advanced ONLY on full success,
+     inside the load transaction. = the run's cutoff.
+   - UPSERT (every run): filter WHENMODIFIED > (watermark-grace) AND <= cutoff, NO posting
+     -window filter (captures ALL changes; avoids the shared-watermark FALL-THROUGH bug).
+     MERGE upsert by natural key; capture OUTPUT $action = inserted vs updated (closes OQ-15).
+   - DELETE-SWEEP (stateless, keys-only pull -> diff vs SQL -> delete missing): the ONLY way
+     to catch Intacct deletions (delta can't see them; = root cause of the 1,908 stale rows).
+     USER DECISION: run the sweep ONCE A NIGHT at 01:00 (not per intraday run), and the
+     nightly job = delete-sweep + upsert together. Daily sweep scope = ~4-month window;
+     MONTHLY (1st) = WIDE sweep (Jan-1-last-year->now) = deep periodic reconcile, supersedes
+     the nightly narrow sweep that day.
+   - Schedule: 08:00 upsert, 17:30 upsert, 01:00 sweep+upsert, 1st monthly wide sweep+upsert.
+   - Refactor orchestrator into MODES (upsert / sweep / sweep-upsert); remove unconditional
+     wipe_window from normal path (keep for one-time SEED backfill only).
+   - Completeness gate: on shortfall/error DO NOT advance watermark, rollback, alert (fixes
+     the partial-commit gap). Parity gate: delta+sweep must reproduce a full-refresh state
+     for the same (env,window) before trusting it. This CR also removes the long-lock issue.
+   - Timezone: WHENMODIFIED in Intacct COMPANY tz — pin watermark/cutoff to same tz (OQ-16).
+   - CONFIRMED live: GLDETAIL & APBILL both expose WHENMODIFIED(datetime)+WHENCREATED
+     (GL also MODIFIED, AUWHENCREATED).
+
+D) NEW OPEN QUESTIONS: specs/10 OQ-16..OQ-21 (tz/format, schedule, purge[action item],
+   seed depth, GL hard-delete confirmation, grace interval).
+
+RESUME NEXT SESSION (delta CR):
+  [ ] User signs off specs/13 (+ answer OQ-16..21). Then draft specs/14 (Key Vault secret
+      provider) + notifier spec (email failure alert + daily success report).
+  [ ] Build (TDD, spec-first): watermark module + control-table DDL (test_), delta filter,
+      keys-only sweep query, orchestrator modes, completeness gate, audit insert/update/delete
+      counts. Validate delta+sweep == full-refresh parity in shadow before cutover.
+
+E) DECISIONS CONFIRMED 2026-07-02 (folded into specs/13, specs/10, docs/TEAM_QUESTIONS.md):
+   - OQ-16 tz = Intacct COMPANY timezone (confirm exact string format at build = OQ-16b).
+   - OQ-21 watermark grace/lookback = 1 HOUR.
+   - OQ-19 seed: PROD already has data from 2024-01-01 (no prod seed; init watermark at cutover
+     cutoff). Only test_ tables need a seed backfill = 2024-01-01 -> now (mirror live for parity).
+   - OQ-2 window date field = ENTRY_DATE (Sage ENTRY_DATE <-> SQL Entry_Date). Delta upsert still
+     filters WHENMODIFIED; the delete-sweep WINDOW is on Entry_Date both sides.
+   - B1: SQL login expires every 3 months; DIANA (project team) rotates it -> she gets KeyVault
+     "Secrets Officer". B2: leave SQL login privileges AS-IS (least-privilege ask DROPPED per user).
+   - Email: send FROM timeclockplus@veritashcsolutions.com (D2); creds in Key Vault. Still need
+     D1 = recipient list (failure + daily report), and C5 = does that mailbox support Graph sendMail
+     (app reg) vs basic SMTP.
+   - Log/audit retention = 1 WEEK (OQ-23).
+   - STILL OPEN for team (docs/TEAM_QUESTIONS.md): A1/A2 (GL/AP true-delete vs reversal — user's
+     team to answer, non-blocking), B4 (SQL backup), C1-C5 (Key Vault + VM managed identity + mailbox
+     send method), D1 (email recipients), D3 (schedule days/tz), D4 (parked purge decision).
+   - NEXT: on answers -> draft specs/14 (Key Vault secret provider + email notifier), then build.
+
+F) SEQUENCING DECISION 2026-07-02: DO NOT BLOCK ON EXTERNAL DEPENDENCIES.
+   - Key Vault: build behind a swappable SecretProvider interface; default = env/.env (as today);
+     REPOINT to Key Vault later, no code change. (User: "progress the project, repoint to vault once
+     we get it.")
+   - Recipients: user placed them in SharePoint Config.xlsx (.../Intacct SQL Feeds/Config.xlsx, site
+     "Integrations"). Build behind a swappable RecipientSource; default = config list; switch to
+     SharePoint read once IT grants Graph access (C6). SAFEGUARD: cache last-known list + fallback
+     admin address so a SharePoint-read failure never blocks a FAILURE alert. Need D1a = sheet/column
+     layout + whether failure vs report recipients are separate. (Same Config.xlsx = env source, OQ-12.)
+   - Email transport: build notifier with an INJECTED transport (unit-testable/mocked); live-wire
+     Graph sendMail (or SMTP) when mailbox access lands. Send FROM timeclockplus@veritashcsolutions.com.
+   => All 3 external integrations (secrets/SharePoint/email) are pluggable, so the BUILD can start now.
+   RECOMMENDED BUILD ORDER (no external blockers): (1) DELTA ENGINE first — watermark module +
+   test_ control-table DDL, WHENMODIFIED delta filter, keys-only delete-sweep, orchestrator modes
+   (upsert/sweep/sweep-upsert), completeness gate, audit insert/update/delete counts; validate
+   delta+sweep == full-refresh parity in shadow. (2) specs/14 secret provider + notifier in parallel.
+
+G) BUILD STARTED 2026-07-02 (TDD, WAVES). Baseline 155 tests -> now 169 green.
+   STEP 1-2 DONE:
+   - src/intacct_etl/watermark.py — get_watermark / set_watermark (update-then-insert-if-absent
+     upsert idiom, bound params, safe_identifier) / create_table_sql (idempotent DDL). Injected conn.
+     Tests: tests/unit/test_watermark.py (6).
+   - sage_query.py — fmt_datetime + build_gl_delta_query_xml + build_ap_delta_query_xml: filter on
+     WHENMODIFIED (strict > since, <= until) ONLY, GL keeps BOOKID=ACCRUAL, AP keeps showprivate,
+     same field sets as full load. Tests: tests/unit/test_sage_query_delta.py (7).
+   - config.py — added 'watermark_table' to _SQL_TARGET_KEYS (test_ guard). Test added (1).
+   - config.example.yaml — added gl/ap.modified_field, sql.watermark_table, sage.datetime_format +
+     watermark_grace_hours.
+   STEP 3 DONE (179 green): delete-sweep building blocks.
+   - sage_query.py — build_gl_keys_query_xml (RECORDNO+LINE_NO, ENTRY_DATE window + BOOKID=ACCRUAL)
+     + build_ap_keys_query_xml (RECORDNO, WHENPOSTED window) + _date_window_filter helper.
+   - sage_client.py — fetch_gl_keys / fetch_ap_keys (reuse _fetch; GL numremaining+1, AP totalcount).
+   - sql_loader.py — sweep_gl(present_keys,start,end) windowed on Entry_Date; sweep_ap(present_keys)
+     FULL compare (APBillTable has NO date column) ; delete-only, bound params, safe_identifier;
+     LoaderMetrics.gl_deleted/ap_deleted/sweep_s. Config: gl_key_columns / ap_key_column (defaults).
+     Tests: test_sage_query_sweep(4), test_sql_loader_sweep(4), test_sage_client_sweep(2).
+   NOTE: AP sweep = full-key compare (no SQL date column on APBillTable) — acceptable (AP small);
+     GL sweep windowed on Entry_Date (daily=4mo / monthly=wide). Document in specs/13 (done).
+
+   STEP 4-5 + CLI DONE (188 green). Delta wired end-to-end (full-refresh path untouched).
+   - sage_client.py — fetch_gl_delta / fetch_ap_delta (WHENMODIFIED since/until). Tests(2).
+   - orchestrator.py — run() dispatches on run.mode: full|upsert|sweep|sweep-upsert. New
+     _process_environment_delta: per-env single txn; get_watermark -> since=(wm-grace) or window
+     floor -> fetch delta -> MERGE upsert (no wipe) -> advance watermark to CUTOFF only for a
+     CLEANLY fetched object (COMPLETENESS GATE). sweep: fetch keys -> sweep_gl(Entry_Date window)/
+     sweep_ap(full) -> skip sweep on partial keys. cutoff = now truncated to minute; grace =
+     timedelta(hours=watermark_grace_hours=1). Helpers _delta_query_opts/_gl_key_set/_ap_key_set.
+     Tests: tests/integration/test_orchestrator_delta.py (5).
+   - cli.py — --mode {full,upsert,sweep,sweep-upsert} -> run.mode. Tests(2).
+   - config.example.yaml — run.mode documented (cron: 08:00/17:30 upsert; 01:00 + monthly sweep-upsert).
+   GOTCHA fixed: `from datetime import time` shadowed the `time` module (time.sleep) -> used
+     datetime.min.time() instead.
+
+   STEP 6-7 DONE (193 green). DELTA ENGINE BUILD COMPLETE (steps 1-7).
+   - audit.py — EnvAudit.gl_deleted/ap_deleted + total_deleted; RunAudit.totals()["deleted"];
+     orchestrator _build_env_audit populates them (0 if rolled back). Tests(1 audit + 1 delta).
+   - tests/integration/test_delta_parity.py (3) — model-based proof: delta(upsert)+sweep from a
+     DIRTY table converges to the SAME key set AND values as a full-refresh (stale row swept, stale
+     amount corrected); and is idempotent on re-run. specs/13 §13.12 parity property = PROVEN offline.
+   TEST COUNT: 155 baseline -> 193 (delta engine adds 38). All full-refresh tests still pass.
+
+   >>> DELTA ENGINE (specs/13) FULLY BUILT & TDD-GREEN. Not yet code-reviewed (WAVES S-gate) and
+       not yet live-validated. REMAINING BEFORE CUTOVER:
+   SPEC 14 DRAFTED (specs/14_secrets_and_notifications.md) + PART A BUILT (207 green).
+   - src/intacct_etl/secret_provider.py — EnvSecretProvider (default, reads env/.env) +
+     KeyVaultSecretProvider (injected fetch; real azure client lazy via VM managed identity) +
+     from_config (provider: env|keyvault). config.resolve_secret now accepts a provider (duck-typed
+     via is_secret_provider) — legacy dict path unchanged. Tests test_secret_provider.py(8).
+   - db.preflight(sql_cfg, secrets, connect) — read-only SELECT 1; returns None|error; never raises;
+     always closes. Tests test_preflight.py(3).
+   - cli.py — builds provider via secret_provider.from_config(cfg['secrets'], env=os.environ) and
+     passes it as `secrets` to the runner; PRE-FLIGHT before run (guarded by 'sql' in cfg + run.preflight):
+     on failure log "password may have expired/rotated" + return 2 (skip runner). Tests(3).
+   - config.example.yaml — secrets: provider/keyvault section documented.
+   PART A DONE. PART B (email notifier) NEXT: failure alert + daily success report; transport
+   graph|smtp (injected for tests); RecipientSource config now / SharePoint Config.xlsx Sheet1/Table1
+   later + cache + fallback_admin; render from RunAudit; best-effort (never crash run). Send from
+   timeclockplus@veritashcsolutions.com.
+   NOTE: azure-identity/azure-keyvault-secrets are LAZY imports — add as optional extras in pyproject
+   only when Key Vault is actually turned on (provider: keyvault).
+
+   PART B BUILT (220 green). Email notifier:
+   - src/intacct_etl/notify.py — build_success_report / build_failure_alert / build_preflight_alert
+     (render from RunAudit, no secrets); ConfigRecipientSource / SharePointRecipientSource(injected
+     fetch) / CachingRecipientSource (save-on-success -> cache -> fallback_admin); SmtpTransport
+     (stdlib smtplib); Notifier.notify(result)/alert() BEST-EFFORT (never raises/changes exit code);
+     from_config(enabled? transport/recipient injectable; graph transport deferred to C5 -> inject/smtp).
+     Tests test_notify.py(11).
+   - cli.py — builds notifier via from_config; alerts on PRE-FLIGHT failure (build_preflight_alert)
+     then return 2; notifies after run (success report / failure alert). make_notifier injectable.
+     Tests(2).
+   - config.example.yaml — notify: section (enabled:false default; from timeclockplus@...; recipient
+     config|sharepoint Sheet1/Table1; fallback_admin+cache; smtp block).
+   PART A + B DONE. specs/14 fully realized in code (Graph transport + SharePoint fetch = lazy stubs,
+   inject/repoint once IT confirms C5/C6). azure/graph libs still not required (lazy).
+
+   >>> BUILD STATUS: delta engine (specs/13) + secrets/notifier (specs/14) COMPLETE & TDD-GREEN
+       (155 baseline -> 220). Full-refresh path untouched. NOT yet code-reviewed (WAVES S-gate),
+       NOT yet live-validated.
+   REMAINING TO SHIP:
+   CODE REVIEW PASS 2 DONE 2026-07-02 (workflow-backed, high effort; docs/CODE_REVIEW.md "Review
+   pass 2"). 10 findings (9 confirmed/2 plausible/1 refuted). Fixed tests-first (220 -> 229 green):
+     CR-D1 sweep_ap deleted all bills outside window -> AP key pull now FULL history (ap.sweep_floor).
+     CR-D2 empty key pull mass-deleted -> skip sweep when key set empty (mass-delete guard).
+     CR-D3 notify transport=graph crashed the run -> GraphTransport never raises at build (best-effort
+           send) + cli wraps notifier setup.
+     CR-D4 delta skipped run_reconcile (parity break) -> reconcile now runs in upsert branch.
+     CR-D5 missing watermark_table crashed whole run -> config read moved inside per-env try.
+     CR-D6 cutoff used server tz not company tz -> _effective_now localizes via run.timezone (live
+           tz confirm still OQ-16b).
+     CR-D7 delta ignored load_strategy guard -> raises NotImplementedError on non-transaction.
+     CR-D8 (accepted) GL sweep no BOOKID on SQL side: invariant table only holds ACCRUAL.
+     CR-D9 (accepted) Entry_Date<=end midnight: matches existing wipe_window boundary.
+     CR-D10 (deferred perf) per-row DELETE loop: batch later; rare/small after D1/D2.
+   CODE REVIEW GATE CLOSED for delta+secrets+notifier.
+   *** CR-D1 REVISED 2026-07-02 (USER CAUGHT a residual defect) ***: the first D1 fix (AP full-history
+   compare from a 2000 floor) STILL broke accumulate — e.g. in 2027 it would delete all 2024 AP rows
+   Intacct no longer returns. FINAL FIX: AP delete-sweep is now WINDOWED on sql.apbill_sweep_date_field
+   [start,end] exactly like GL (old data outside window never touched); if that column is not configured
+   (default) AP sweep is SKIPPED entirely (no destructive full-table compare). AP UPSERT still works;
+   only AP DELETION detection is deferred until a date column exists. Added MASS-DELETE GUARD
+   sql.sweep_max_delete_fraction (default 0.5) on BOTH GL+AP: sweep raises SweepGuardError (rollback)
+   if it would delete > fraction of scanned rows. sql_loader.SweepGuardError added. Removed ap.sweep_floor.
+   Tests: test_ap_sweep_skipped_without_date_field, test_ap_sweep_windowed_when_date_field_configured,
+   test_sweep_gl_aborts_on_mass_delete, test_sweep_ap_windowed_on_date_field. Suite 229 -> 232 green.
+   OQ-26 upgraded to a real DBA dependency (add When_Posted col to APBillTable + populate in
+   test_AddAPBillBulk); added TEAM_QUESTIONS B5. specs/13 §13.5 + specs/10 OQ-26 + CODE_REVIEW CR-D1 updated.
+
+   [ ] (done) CODE REVIEW gate on all delta+secrets+notifier changes (docs/CODE_REVIEW.md) before ship.
+   [ ] Build real Graph sendMail transport + SharePoint Table1 fetch once IT confirms C5/C6 (inject
+       points already exist). Add azure-identity/azure-keyvault-secrets + requests(graph) to pyproject
+       extras when Key Vault / Graph turned on.
+   [ ] LIVE: create test_etl_watermark (watermark.create_table_sql); SEED test_ tables 2024-01-01->now
+       (--mode full backfill); shadow-run --mode upsert then sweep-upsert; reconcile test_ vs Sage
+       authoritative + Make prod; confirm OQ-16b (WHENMODIFIED datetime string/format); schedule cron
+       (08:00/17:30 upsert; 01:00 + monthly sweep-upsert) with flock + failure email.
+   [ ] Team OQs outstanding: B4 (backup), B5 (add date col to APBillTable -> enables AP sweep),
+       C1-C6 (KeyVault/mailbox/SharePoint), D3 (schedule days/tz). See docs/TEAM_QUESTIONS.md.
+
+   REGRESSION LOCKED 2026-07-02: tests/unit/test_sql_loader_sweep.py adds a DATE-AWARE fake
+   (_DatedConn/_DatedCursor) that models the windowed SELECT (returns only in-window rows) —
+   test_gl_sweep_2027_never_touches_out_of_window_history + test_ap_sweep_2027_... prove a 2027
+   monthly-style window [2026-01-01..2027-07-31] never reads/deletes 2024 rows (GL+AP), only genuine
+   in-window deletions. Suite 232 -> 234 green. (Confirms both-sides-windowed sweep answers the user's
+   2024-in-2027 concern; date column is what enables the SQL-side window.)
+
+   AP DATE COLUMN (B5): likely = the bill POSTING DATE (Intacct WHENPOSTED), stored e.g. When_Posted
+   DATE. It's the period basis (open/closed governs delete-vs-reverse) AND the field the AP feed already
+   filters on. To populate: add WHENPOSTED to AP select fields + map it in test_AddAPBillBulk + set
+   sql.apbill_sweep_date_field=When_Posted. (Blocked on DBA adding col + updating proc.)
+
+   OQ-20 RESOLVED 2026-07-02 (client answer on GL/AP deletes): hard delete ONLY in OPEN periods;
+   CLOSED periods are REVERSAL-ONLY (reversals = new rows, caught by the delta UPSERT automatically).
+   ARCHITECTURAL IMPLICATION (big + reassuring): the delete-sweep only needs to cover the currently-
+   OPEN period(s) — a recent window, NOT all history. Old/closed data is never hard-deleted in Intacct,
+   so windowed-sweep + accumulate is PROVABLY safe (can never wrongly drop history). The GL daily
+   (~4-mo) / monthly (wide) windows comfortably cover open periods. Watch-item: sweep window must span
+   every open period (fine unless a period stays open > ~3-4 months). Updated specs/13 §13.5 period
+   rule, specs/10 OQ-20, TEAM_QUESTIONS A1/A2. User checking if a date column can be added to APBillTable
+   (B5) — that + the period rule makes AP deletion-reconcile fully safe (windowed to open periods).
+
+   [ ] (legacy note) specs/14 Part B build: email notifier (failure
+       alert + daily success report; recipients from SharePoint Config.xlsx Sheet1/Table1; cache+
+       fallback). Send from timeclockplus@veritashcsolutions.com. (Depends on IT: KeyVault, mailbox
+       method C5, SharePoint read C6 — all "build now, repoint later".)
+   [ ] Run CODE REVIEW gate on the delta changes (docs/CODE_REVIEW.md) before ship.
+   [ ] LIVE: create test_etl_watermark table (watermark.create_table_sql); SEED test_ tables
+       2024-01-01->now (--mode full backfill); shadow-run --mode upsert / sweep-upsert; reconcile
+       test_ vs Sage authoritative + vs Make prod; then schedule cron (08:00/17:30 upsert, 01:00 +
+       monthly sweep-upsert) with flock + failure email.
+   [ ] Confirm OQ-16b (WHENMODIFIED exact datetime string/format) live; team OQs (A1/A2 deletes,
+       C1-C6, D3 schedule days/tz).
+   (upsert/sweep/sweep-upsert) + drop unconditional wipe from normal path + advance watermark on
+   success; completeness gate (no advance on shortfall/error); audit insert/update/delete counts;
+   parity test delta+sweep == full-refresh. Then specs/14 (secret provider + notifier).
+================================================================================

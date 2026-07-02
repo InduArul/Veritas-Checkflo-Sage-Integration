@@ -88,6 +88,58 @@ class SageClient:
             build, lambda p: pagination.gl_total(int(p.get("numremaining") or 0)), page_size
         )
 
+    def fetch_gl_delta(self, session_id: str, since, until,
+                       page_size: int = DEFAULT_PAGE_SIZE, **qopts):
+        """Fetch GL records changed in (since, until] on WHENMODIFIED (specs/13 §13.4)."""
+        def build(offset, page_size, return_json):
+            return sage_query.build_gl_delta_query_xml(
+                session_id=session_id, since=since, until=until, offset=offset,
+                page_size=page_size, return_json=return_json, creds=self.creds, **qopts,
+            )
+
+        return self._fetch(
+            build, lambda p: pagination.gl_total(int(p.get("numremaining") or 0)), page_size
+        )
+
+    def fetch_ap_delta(self, session_id: str, since, until,
+                       page_size: int = DEFAULT_PAGE_SIZE, **qopts):
+        """Fetch AP records changed in (since, until] on WHENMODIFIED (specs/13 §13.4)."""
+        def build(offset, page_size, return_json):
+            return sage_query.build_ap_delta_query_xml(
+                session_id=session_id, since=since, until=until, offset=offset,
+                page_size=page_size, return_json=return_json, creds=self.creds, **qopts,
+            )
+
+        return self._fetch(
+            build, lambda p: pagination.ap_total(int(p.get("totalcount") or 0)), page_size
+        )
+
+    def fetch_gl_keys(self, session_id: str, start: date, end: date,
+                      page_size: int = DEFAULT_PAGE_SIZE, **qopts):
+        """Fetch GL natural keys only (RECORDNO+LINE_NO) for the delete-sweep (specs/13 §13.5)."""
+        def build(offset, page_size, return_json):
+            return sage_query.build_gl_keys_query_xml(
+                session_id=session_id, start=start, end=end, offset=offset,
+                page_size=page_size, return_json=return_json, creds=self.creds, **qopts,
+            )
+
+        return self._fetch(
+            build, lambda p: pagination.gl_total(int(p.get("numremaining") or 0)), page_size
+        )
+
+    def fetch_ap_keys(self, session_id: str, start: date, end: date,
+                      page_size: int = DEFAULT_PAGE_SIZE, **qopts):
+        """Fetch AP keys only (RECORDNO) for the delete-sweep (specs/13 §13.5)."""
+        def build(offset, page_size, return_json):
+            return sage_query.build_ap_keys_query_xml(
+                session_id=session_id, start=start, end=end, offset=offset,
+                page_size=page_size, return_json=return_json, creds=self.creds, **qopts,
+            )
+
+        return self._fetch(
+            build, lambda p: pagination.ap_total(int(p.get("totalcount") or 0)), page_size
+        )
+
     def fetch_ap(self, session_id: str, start: date, end: date,
                  page_size: int = DEFAULT_PAGE_SIZE, **qopts):
         def build(offset, page_size, return_json):

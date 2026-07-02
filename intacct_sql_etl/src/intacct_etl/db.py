@@ -52,3 +52,28 @@ def connect(sql_cfg: dict, secrets=None):
     import pyodbc  # noqa: WPS433 (lazy: unit tests don't need the driver)
 
     return pyodbc.connect(build_connection_string(sql_cfg, secrets))
+
+
+def preflight(sql_cfg: dict, secrets=None, *, connect=connect):
+    """Read-only SQL connectivity check (specs/14 §14.4).
+
+    Resolves the SQL secret, opens a connection and runs `SELECT 1`. Returns None on success, else a
+    short error string (used to fail fast with a specific 'password may have expired' alert). Never
+    raises — connection is always closed.
+    """
+    conn = None
+    try:
+        conn = connect(sql_cfg, secrets)
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        cur.fetchone()
+        cur.close()
+        return None
+    except Exception as exc:                        # surfaced to the caller, not swallowed
+        return str(exc) or exc.__class__.__name__
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:                       # best-effort close; the primary error already returned
+                pass

@@ -206,3 +206,36 @@ Reviewed against the same checklist — **0 new findings**:
 - **Naming/DRY/OOP:** dataclasses (`EnvAudit`/`RunAudit`/`LoaderMetrics`), `record_page` helper, no dupes.
 
 **Verification:** `PYTHONPATH=src python -m pytest -q` → **152 passed** (140 + 12 audit tests).
+
+---
+
+## Review pass 2 — delta engine (specs/13) + secrets/notifier (specs/14)
+
+**Date:** 2026-07-02. **Method:** workflow-backed review (4 finder angles + independent per-location
+verifiers, high effort). **Scope:** this session's changes — `watermark.py`, `sql_loader.py`
+(sweep), `sage_query.py` (delta/keys builders), `sage_client.py` (delta/keys fetch),
+`orchestrator.py` (delta modes), `audit.py` (delete counts), `cli.py` (`--mode`, secrets/notify
+wiring), `secret_provider.py`, `db.preflight`, `notify.py`.
+
+**Outcome:** 10 distinct findings (9 confirmed, 2 plausible, 1 refuted). All **correctness/crash**
+findings fixed tests-first (suite 220 → **229 green**); lower-severity items dispositioned below.
+
+> **STATUS: ✅ CLOSED — 0 open correctness findings.**
+
+Severity: 🔴 Critical · 🟠 Major · 🟡 Minor
+
+| # | Sev | Finding | Disposition |
+|---|-----|---------|-------------|
+| CR-D1 | 🔴 | `sweep_ap` compared the FULL AP table to a window-scoped key set → deleted all bills outside the window | **FIXED (revised — user-caught follow-up 2026-07-02)** — the first fix (full-history compare) still broke *accumulate* (in 2027 it would delete 2024 rows Intacct no longer returns). Final: AP sweep is **windowed on `apbill_sweep_date_field`** like GL, or **SKIPPED** if no date column (default); plus a **mass-delete guard** (`sweep_max_delete_fraction`, aborts+rolls back). Tests `test_ap_sweep_skipped_without_date_field`, `test_ap_sweep_windowed_when_date_field_configured`, `test_sweep_gl_aborts_on_mass_delete`. Windowed AP sweep needs a DBA date column → OQ-26. |
+| CR-D2 | 🔴 | Empty (error-free) key pull → every in-scope row judged missing → mass delete | **FIXED** — skip sweep when key set empty (mass-delete guard); test `test_sweep_skipped_when_key_pull_is_empty` |
+| CR-D3 | 🔴 | Notifier `transport: graph` (documented default) raised at construction → aborted the whole run | **FIXED** — `GraphTransport` never raises at build (send is best-effort); CLI wraps notifier setup; tests `test_from_config_graph_transport_does_not_raise_at_build`, `test_graph_transport_send_is_best_effort_not_a_crash` |
+| CR-D4 | 🟠 | Delta path never ran `run_reconcile` → GL link/vendor diverge from full refresh (parity break) | **FIXED** — reconcile runs in the upsert branch; test `test_upsert_runs_reconcile` |
+| CR-D5 | 🟠 | Missing `watermark_table` read before try → whole-run crash instead of per-env isolation | **FIXED** — config read moved inside try; test `test_delta_missing_watermark_table_is_isolated_not_a_crash` |
+| CR-D6 | 🟠 | Cutoff used server-local tz but WHENMODIFIED filter is company-tz → skipped records past grace | **FIXED** — `_effective_now` computes cutoff in `run.timezone` (company tz); tests `test_effective_now_*`. Live confirmation of Sage's WHENMODIFIED tz remains OQ-16b. |
+| CR-D7 | 🟠 | Delta ignored the `load_strategy` guard the full path enforces | **FIXED** — delta raises `NotImplementedError` on non-`transaction` strategy; test `test_delta_unsupported_load_strategy_marks_error` |
+| CR-D8 | 🟡 | `sweep_gl` SQL SELECT has no BOOKID filter while GL key pull is ACCRUAL-only | **ACCEPTED** — invariant: the GL table only ever holds ACCRUAL rows (every load path filters BOOKID=ACCRUAL), so no non-ACCRUAL row exists to mis-delete. Revisit if a non-ACCRUAL book is ever loaded. |
+| CR-D9 | 🟡 | `Entry_Date <= end` binds a midnight `date`; DATETIME rows late on `end` could be missed | **ACCEPTED (matches existing)** — identical to the full-refresh `wipe_window` boundary; `Entry_Date` treated as a date. Revisit if it becomes a time-bearing DATETIME (add +1 day exclusive bound). |
+| CR-D10 | 🟡 | Sweeps issue one DELETE per missing key (N round-trips) | **DEFERRED (perf)** — with CR-D1/D2 fixed, deletions are rare/small. Batch via temp-table anti-join if a large sweep ever shows up. |
+| — | — | (refuted) CachingRecipientSource "dead" on config path | **NO CHANGE** — cache+fallback is intentional defense; not a defect. |
+
+**Verification:** `python -m pytest -q` → **229 passed**.

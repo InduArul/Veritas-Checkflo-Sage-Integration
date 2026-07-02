@@ -11,14 +11,17 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Callable
 
 from . import audit as auditmod
 from . import config as cfgmod
 from . import dates
+from . import watermark as wmmod
 from .sage_client import SageError
 from .sql_loader import SqlLoader
+
+DELTA_MODES = ("upsert", "sweep", "sweep-upsert")
 
 log = logging.getLogger(__name__)
 
@@ -102,6 +105,218 @@ def _query_opts(cfg: dict) -> tuple[dict, dict]:
     if "show_private" in ap:
         ap_opts["show_private"] = ap["show_private"]
     return gl_opts, ap_opts
+
+
+def _truncate_cutoff(now_dt: datetime) -> datetime:
+    """Closed-time upper bound: drop sub-minute precision so we never page the open minute (§13.6)."""
+    return now_dt.replace(second=0, microsecond=0)
+
+
+def _effective_now(now, tz_name, injected: bool) -> datetime:
+    """Wall-clock 'now' in the Sage company timezone (specs/13 §13.6; fixes the server-tz gap).
+
+    If the caller injected a clock (tests) or no timezone is configured, use it as-is. Otherwise
+    read the current time in the configured company tz so the WHENMODIFIED cutoff/watermark are on
+    the same basis Sage filters (naive company-local), regardless of the VM's own timezone.
+    """
+    if injected or not tz_name:
+        return now()
+    try:
+        from zoneinfo import ZoneInfo  # noqa: WPS433 (stdlib 3.9+)
+        return datetime.now(ZoneInfo(tz_name)).replace(tzinfo=None)
+    except Exception:                   # bad tz name / no tzdata — fall back to the given clock
+        return now()
+
+
+def _delta_query_opts(cfg: dict):
+    """Build (gl_delta, ap_delta, gl_keys, ap_keys) builder-option dicts from config (CR-06)."""
+    gl, ap = cfg.get("gl", {}) or {}, cfg.get("ap", {}) or {}
+    sage, run = cfg.get("sage", {}) or {}, cfg.get("run", {}) or {}
+    common = {}
+    if sage.get("dtd_version"):
+        common["dtd_version"] = sage["dtd_version"]
+    dtf, df = sage.get("datetime_format"), run.get("date_format")
+
+    gl_delta = dict(common)
+    if dtf:
+        gl_delta["datetime_format"] = dtf
+    for src, dst in (("book_filter", "book_filter"), ("modified_field", "modified_field"),
+                     ("select_fields", "fields"), ("order_by", "order_by")):
+        if gl.get(src):
+            gl_delta[dst] = gl[src]
+
+    ap_delta = dict(common)
+    if dtf:
+        ap_delta["datetime_format"] = dtf
+    if ap.get("modified_field"):
+        ap_delta["modified_field"] = ap["modified_field"]
+    if "show_private" in ap:
+        ap_delta["show_private"] = ap["show_private"]
+
+    gl_keys = dict(common)
+    if df:
+        gl_keys["date_format"] = df
+    if gl.get("book_filter"):
+        gl_keys["book_filter"] = gl["book_filter"]
+    ap_keys = dict(common)
+    if df:
+        ap_keys["date_format"] = df
+    return gl_delta, ap_delta, gl_keys, ap_keys
+
+
+def _gl_key_set(records):
+    return {(str(r.get("RECORDNO", "")), str(r.get("LINE_NO", ""))) for r in records}
+
+
+def _ap_key_set(records):
+    return {(str(r.get("RECORDNO", "")),) for r in records}
+
+
+def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start, end, cutoff,
+                               grace, page_size, require_test, strategy, settle_s, sleep,
+                               max_delete_fraction, opts, connect, sage_client_factory, run_log,
+                               clock, now):
+    """Delta run for one environment (specs/13): watermark-driven upsert and/or delete-sweep,
+    inside a single transaction. Watermark advances per object only on a clean fetch (§13.11).
+    Never raises — failures isolated like the full-refresh path."""
+    name = env["name"]
+    entry = _new_entry()
+    conn = None
+    loader = None
+    extract_s = 0.0
+    started_at = now()
+    t_start = clock()
+    gl_delta_opts, ap_delta_opts, gl_keys_opts, ap_keys_opts = opts
+    floor = datetime.combine(start, datetime.min.time())
+    try:
+        if strategy != "transaction":   # CR: match the full-refresh guard (fail loud on unsupported)
+            raise NotImplementedError(
+                f"sql.load_strategy '{strategy}' not implemented (use 'transaction')"
+            )
+        sql_cfg = cfg["sql"]            # CR: read config INSIDE try so a missing key isolates per-env
+        wm_table = sql_cfg["watermark_table"]
+        creds = cfgmod.resolve_env_creds(cfg, env, secrets)
+        conn = connect(sql_cfg, secrets)
+        loader = SqlLoader(conn, sql_cfg, require_test_targets=require_test, clock=clock)
+        client = sage_client_factory(creds)
+        session_id = client.login()
+
+        if do_upsert:
+            wm_gl = wmmod.get_watermark(conn, wm_table, name, "GL")
+            since_gl = (wm_gl - grace) if wm_gl else floor
+            te = clock()
+            gl, gl_err = client.fetch_gl_delta(session_id, since_gl, cutoff,
+                                               page_size=page_size, **gl_delta_opts)
+            extract_s += clock() - te
+            if gl_err:
+                entry["gl_errors"].append(gl_err)
+                entry["gl_error"] = entry["gl_error"] or gl_err
+                log.warning("%s: GL delta error: %s", name, gl_err)
+            entry["gl_records"] += len(gl)
+            entry["gl_loaded"] += loader.load_gl_records(gl, page_size=page_size, commit=False)
+
+            wm_ap = wmmod.get_watermark(conn, wm_table, name, "AP")
+            since_ap = (wm_ap - grace) if wm_ap else floor
+            te = clock()
+            ap, ap_err = client.fetch_ap_delta(session_id, since_ap, cutoff,
+                                               page_size=page_size, **ap_delta_opts)
+            extract_s += clock() - te
+            if ap_err:
+                entry["ap_errors"].append(ap_err)
+                entry["ap_error"] = entry["ap_error"] or ap_err
+                log.warning("%s: AP delta error: %s", name, ap_err)
+            entry["ap_records"] += len(ap)
+            entry["ap_loaded"] += loader.load_ap_records(ap, page_size=page_size, commit=False)
+
+            # Post-load reconcile (sync AP links -> GL, update vendor), same as the full-refresh path
+            # (CR: was missing from delta -> broke parity, specs/13 §13.12).
+            if settle_s:
+                sleep(settle_s)
+            loader.run_reconcile(start, end, commit=False)
+
+            # Completeness gate (§13.11): advance the watermark ONLY for a cleanly-fetched object.
+            if not gl_err:
+                wmmod.set_watermark(conn, wm_table, name, "GL", cutoff, commit=False, now=now())
+            if not ap_err:
+                wmmod.set_watermark(conn, wm_table, name, "AP", cutoff, commit=False, now=now())
+
+        if do_sweep:
+            te = clock()
+            gl_keys, gk_err = client.fetch_gl_keys(session_id, start, end,
+                                                   page_size=page_size, **gl_keys_opts)
+            extract_s += clock() - te
+            if gk_err:
+                entry["gl_errors"].append(gk_err)
+                entry["gl_error"] = entry["gl_error"] or gk_err
+                log.warning("%s: GL keys error — skipping GL sweep (never delete on partial): %s",
+                            name, gk_err)
+            elif not gl_keys:
+                # CR mass-delete guard: an empty (but error-free) key pull would mark every in-scope
+                # row 'missing'. Skip rather than nuke the window (a benign filter/window mismatch).
+                log.warning("%s: GL key pull returned 0 rows — skipping GL sweep (mass-delete guard)",
+                            name)
+            else:
+                loader.sweep_gl(_gl_key_set(gl_keys), start, end, commit=False,
+                                max_delete_fraction=max_delete_fraction)
+
+            # AP sweep is windowed on a real date column (respects accumulate, specs/13 §13.9). If no
+            # such column is configured, AP sweep is SKIPPED — never a destructive full-table compare
+            # (which would delete historical bills Intacct no longer returns).
+            ap_date_field = sql_cfg.get("apbill_sweep_date_field")
+            if not ap_date_field:
+                log.info("%s: AP sweep skipped — no apbill_sweep_date_field configured "
+                         "(APBillTable needs a date column to sweep safely)", name)
+            else:
+                te = clock()
+                ap_keys, ak_err = client.fetch_ap_keys(session_id, start, end,
+                                                       page_size=page_size, **ap_keys_opts)
+                extract_s += clock() - te
+                if ak_err:
+                    entry["ap_errors"].append(ak_err)
+                    entry["ap_error"] = entry["ap_error"] or ak_err
+                    log.warning("%s: AP keys error — skipping AP sweep: %s", name, ak_err)
+                elif not ap_keys:
+                    log.warning("%s: AP key pull returned 0 rows — skipping AP sweep (mass-delete guard)",
+                                name)
+                else:
+                    loader.sweep_ap(_ap_key_set(ap_keys), start, end, date_field=ap_date_field,
+                                    commit=False, max_delete_fraction=max_delete_fraction)
+
+        conn.commit()
+        log.info("%s: delta complete (gl=%d ap=%d gl_del=%d ap_del=%d)", name,
+                 entry["gl_loaded"], entry["ap_loaded"],
+                 loader.metrics.gl_deleted, loader.metrics.ap_deleted)
+        if run_log:
+            run_log.add(
+                f'Delta for "{name}" complete: GL {entry["gl_loaded"]} upserted, '
+                f'AP {entry["ap_loaded"]} upserted, '
+                f'{loader.metrics.gl_deleted} GL / {loader.metrics.ap_deleted} AP swept'
+            )
+    except Exception as exc:
+        _EXPECTED = (SageError, cfgmod.ConfigError)
+        entry["error"] = str(exc) or exc.__class__.__name__
+        unexpected = not isinstance(exc, _EXPECTED)
+        log.error("%s: FAILED: %s", name, entry["error"], exc_info=unexpected)
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception as rb:                 # CR-03: surface, never swallow
+                entry["rollback_error"] = str(rb) or rb.__class__.__name__
+                log.error("%s: ROLLBACK FAILED: %s", name, entry["rollback_error"])
+        if run_log:
+            run_log.add(f'Delta for "{name}" FAILED: {entry["error"]}')
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception as ce_err:
+                entry["close_error"] = str(ce_err) or ce_err.__class__.__name__
+                log.warning("%s: connection close failed: %s", name, entry["close_error"])
+
+    env_audit = _build_env_audit(name, entry, loader, extract_s=extract_s,
+                                 started_at=started_at, finished_at=now(),
+                                 duration_s=clock() - t_start)
+    return entry, env_audit
 
 
 def _process_environment(env, *, cfg, secrets, start, end, chunks, granularity, page_size,
@@ -213,6 +428,8 @@ def _build_env_audit(name, entry, loader, *, extract_s, started_at, finished_at,
     ap_pages = getattr(loader.metrics, "ap_pages", 0) if loader else 0
     gl_affected = getattr(loader.metrics, "gl_rows_affected", 0) if (loader and committed) else 0
     ap_affected = getattr(loader.metrics, "ap_rows_affected", 0) if (loader and committed) else 0
+    gl_deleted = getattr(loader.metrics, "gl_deleted", 0) if (loader and committed) else 0
+    ap_deleted = getattr(loader.metrics, "ap_deleted", 0) if (loader and committed) else 0
     transform_s = (getattr(loader.metrics, "gl_encode_s", 0.0)
                    + getattr(loader.metrics, "ap_encode_s", 0.0)) if loader else 0.0
     load_s = (getattr(loader.metrics, "gl_db_s", 0.0)
@@ -226,7 +443,8 @@ def _build_env_audit(name, entry, loader, *, extract_s, started_at, finished_at,
         gl_loaded=entry["gl_loaded"] if committed else 0,
         ap_loaded=entry["ap_loaded"] if committed else 0,
         gl_rows_affected=gl_affected, ap_rows_affected=ap_affected,
-        gl_pages=gl_pages, ap_pages=ap_pages, failed=failed,
+        gl_pages=gl_pages, ap_pages=ap_pages,
+        gl_deleted=gl_deleted, ap_deleted=ap_deleted, failed=failed,
         extract_s=extract_s, transform_s=transform_s, load_s=load_s,
         wipe_s=wipe_s, reconcile_s=reconcile_s, duration_s=duration_s,
         started_at=started_at.isoformat() if started_at else None,
@@ -239,6 +457,7 @@ def _build_env_audit(name, entry, loader, *, extract_s, started_at, finished_at,
 def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
         run_log=None, sleep=time.sleep, clock: Callable[[], float] = time.monotonic,
         now: Callable[[], datetime] = None) -> RunResult:
+    now_injected = now is not None
     now = now or datetime.now
     run_cfg = cfg.get("run", {})
     run_type, start, end = _derive(today, run_cfg)
@@ -249,6 +468,12 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
     strategy = cfg.get("sql", {}).get("load_strategy", "transaction")
     settle_s = cfg.get("retry", {}).get("reconcile_settle_s", 0) or 0
     gl_opts, ap_opts = _query_opts(cfg)
+    mode = run_cfg.get("mode", "full")                         # specs/13: full | upsert | sweep | sweep-upsert
+    delta = mode in DELTA_MODES
+    cutoff = _truncate_cutoff(_effective_now(now, run_cfg.get("timezone"), now_injected))
+    grace = timedelta(hours=cfg.get("sage", {}).get("watermark_grace_hours", 1))
+    delta_opts = _delta_query_opts(cfg)
+    max_delete_fraction = cfg.get("sql", {}).get("sweep_max_delete_fraction", 0.5)
 
     started = now()
     t_run = clock()
@@ -257,7 +482,7 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
         window_start=str(start), window_end=str(end), started_at=started.isoformat(),
     )
     result = RunResult(run_type=run_type, start=start, end=end, audit=run_audit)
-    log.info("Start of process: run_type=%s window=%s..%s", run_type, start, end)
+    log.info("Start of process: mode=%s run_type=%s window=%s..%s", mode, run_type, start, end)
     if run_log:
         run_log.add("Start of process")
         run_log.add(f"Run type: {run_type}; window: {start} .. {end}")
@@ -265,13 +490,24 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
     for env in cfg.get("environments", []):
         if not env.get("enabled", True):
             continue
-        entry, env_audit = _process_environment(
-            env, cfg=cfg, secrets=secrets, start=start, end=end, chunks=chunks,
-            granularity=granularity, page_size=page_size, require_test=require_test,
-            strategy=strategy, gl_opts=gl_opts, ap_opts=ap_opts, connect=connect,
-            sage_client_factory=sage_client_factory, settle_s=settle_s, sleep=sleep,
-            run_log=run_log, clock=clock, now=now,
-        )
+        if delta:
+            entry, env_audit = _process_environment_delta(
+                env, do_upsert=mode in ("upsert", "sweep-upsert"),
+                do_sweep=mode in ("sweep", "sweep-upsert"),
+                cfg=cfg, secrets=secrets, start=start, end=end, cutoff=cutoff, grace=grace,
+                page_size=page_size, require_test=require_test, strategy=strategy,
+                settle_s=settle_s, sleep=sleep, max_delete_fraction=max_delete_fraction,
+                opts=delta_opts, connect=connect, sage_client_factory=sage_client_factory,
+                run_log=run_log, clock=clock, now=now,
+            )
+        else:
+            entry, env_audit = _process_environment(
+                env, cfg=cfg, secrets=secrets, start=start, end=end, chunks=chunks,
+                granularity=granularity, page_size=page_size, require_test=require_test,
+                strategy=strategy, gl_opts=gl_opts, ap_opts=ap_opts, connect=connect,
+                sage_client_factory=sage_client_factory, settle_s=settle_s, sleep=sleep,
+                run_log=run_log, clock=clock, now=now,
+            )
         result.environments[env["name"]] = entry
         run_audit.environments.append(env_audit)
 

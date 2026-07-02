@@ -88,6 +88,13 @@ def test_assert_test_sql_targets_shared_guard_blocks_prod():
         config.assert_test_sql_targets({"gl_table": "dbo.GLTable"})
 
 
+def test_assert_test_sql_targets_guards_watermark_table():
+    # specs/13: the delta watermark control table must also be test_-prefixed in test mode
+    with pytest.raises(config.ConfigError):
+        config.assert_test_sql_targets({"watermark_table": "dbo.etl_watermark"})
+    config.assert_test_sql_targets({"watermark_table": "dbo.test_etl_watermark"})  # ok
+
+
 def test_assert_test_targets_passes_when_all_prefixed():
     cfg = {
         "sql": {

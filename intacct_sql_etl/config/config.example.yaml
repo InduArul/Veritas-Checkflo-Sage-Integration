@@ -4,6 +4,8 @@
 
 run:
   test_mode: true                     # true = require test_-prefixed SQL targets (dev/test). false = PROD cutover.
+  mode: upsert                        # specs/13: full (legacy refresh/seed) | upsert | sweep | sweep-upsert
+                                      #   cron: 08:00 & 17:30 upsert; 01:00 sweep-upsert; monthly 1st sweep-upsert
   schedule_times: ["08:00", "17:30"]   # orchestrator run times (OQ-8: confirm tz/weekdays)
   timezone: "America/Los_Angeles"      # OQ-8 confirm
   run_type_override: auto              # auto | daily | monthly  (auto = derive from run date)
@@ -28,6 +30,8 @@ sage:
   page_size: 2000
   request_timeout_s: 60
   gzip: true
+  datetime_format: "%m/%d/%Y %H:%M:%S"  # specs/13 delta: WHENMODIFIED filter format (company tz)
+  watermark_grace_hours: 1              # specs/13: re-scan margin before the bookmark (OQ-21 = 1h)
   # credentials per environment resolved from secret store by sage_creds_key + this pattern:
   #   e.g. Prod_Sage_Evergreen_SENDER_ID / _SENDER_PASSWORD / _USER_ID / _USER_PASSWORD / _COMPANY_ID
   secret_key_pattern: "{key}_{field}"
@@ -36,6 +40,7 @@ gl:
   object: GLDETAIL
   date_field: BATCH_DATE
   book_filter: ACCRUAL                 # business rule
+  modified_field: WHENMODIFIED         # specs/13 delta: change-tracking field (datetime, company tz)
   count_basis: numremaining_plus_1
   order_by: [AUWHENCREATED, RECORDNO, LINE_NO]
   select_fields:                       # exact order matters
@@ -47,6 +52,7 @@ ap:
   object: APBILL
   date_field: WHENPOSTED
   show_private: true                   # business rule
+  modified_field: WHENMODIFIED         # specs/13 delta: change-tracking field (datetime, company tz)
   count_basis: totalcount
   order_by: [RECORDNO]
   select_fields:                       # the 7-field PAGE set (load set)
@@ -64,14 +70,47 @@ sql:
   # In test_mode the names below MUST be test_-prefixed (e.g. dbo.test_GLTable / test_AddGLDetailBulk).
   gl_table: dbo.GLTable
   apbill_table: dbo.APBillTable
+  watermark_table: dbo.etl_watermark   # specs/13 delta bookmark control table (test_ in test mode)
   gl_delete_date_field: Entry_Date    # mainflow deletes GL on Entry_Date (OQ-2 vs gl.date_field)
   apbill_delete_date_field: WHENPOSTED # used only when apbill_full_reload: false
-  apbill_full_reload: true            # APBillTable wiped fully each run
+  apbill_full_reload: true            # APBillTable wiped fully each run (full-refresh path only)
+  # specs/13 delta delete-sweep safety:
+  # apbill_sweep_date_field: When_Posted  # a REAL date column on APBillTable — enables WINDOWED AP
+  #                                       # sweep (respects accumulate). If unset, AP sweep is SKIPPED
+  #                                       # (never a destructive full-table compare). Needs DBA to add
+  #                                       # the column + have test_AddAPBillBulk populate it (OQ-26).
+  sweep_max_delete_fraction: 0.5      # abort a sweep that would delete > this fraction of scanned rows
   load_strategy: transaction          # transaction | staging_swap (OQ-5; staging not yet implemented)
   proc_add_gl: AddGLDetailBulk
   proc_add_ap: AddAPBillBulk
   proc_sync_links: "[Intacct].[dbo].[SyncAPLinksToGL]"
   proc_update_vendor: "[Intacct].[dbo].[UpdateVendorInfoInGL]"
+
+secrets:                              # specs/14 Part A — build now (env), repoint to Key Vault later
+  provider: env                       # env | keyvault
+  keyvault:
+    vault_url: ""                     # https://<vault>.vault.azure.net/  (when provider: keyvault; VM managed identity reads it)
+    name_map: { SQL_PASSWORD: sql-password }   # logical key -> Key Vault secret name
+
+notify:                               # specs/14 Part B — failure alert + daily success report
+  enabled: false                      # turn on once transport/recipients are confirmed
+  transport: graph                    # graph (preferred) | smtp   (C5/OQ-27)
+  from_address: timeclockplus@veritashcsolutions.com
+  events: { on_failure: true, on_success: true }
+  recipient_source: config            # config | sharepoint (needs Graph access C6/OQ-28)
+  recipients: []                      # used when recipient_source: config
+  fallback_admin: ""                  # always-reachable safety recipient (failure alerts never blocked)
+  cache_path: ./cache/recipients.json # last-known-good recipient cache
+  sharepoint:                         # used when recipient_source: sharepoint
+    file: ".../Intacct SQL Feeds/Config.xlsx"
+    sheet: Sheet1
+    table: Table1
+  smtp:                               # used when transport: smtp
+    host: ""
+    port: 587
+    username: ""
+    password_secret_key: SMTP_PASSWORD
+    use_tls: true
 
 retry:
   count: 3                            # transport attempts (1 = no retry)

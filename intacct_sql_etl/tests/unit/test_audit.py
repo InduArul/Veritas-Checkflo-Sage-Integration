@@ -91,3 +91,14 @@ def test_write_audit_stdout(capsys):
     cfg = {"enabled": True, "sink": "stdout"}
     assert audit.write_audit(_run_audit(), cfg) is None
     assert "20260625_080000" in capsys.readouterr().out
+
+
+def test_env_audit_surfaces_delete_counts():
+    # specs/13: the delete-sweep counts are part of the audit record + rollup
+    e = audit.EnvAudit(name="E", gl_deleted=3, ap_deleted=1)
+    assert e.total_deleted == 4
+    d = e.to_dict()
+    assert d["gl_deleted"] == 3 and d["ap_deleted"] == 1 and d["total_deleted"] == 4
+    ra = audit.RunAudit(run_id="r", run_type="daily", window_start="a", window_end="b",
+                        environments=[e])
+    assert ra.totals()["deleted"] == 4

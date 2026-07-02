@@ -16,6 +16,7 @@ REQUIRED_SECTIONS = ("run", "environments", "sage", "gl", "ap", "sql", "retry", 
 _SQL_TARGET_KEYS = (
     "gl_table",
     "apbill_table",
+    "watermark_table",           # specs/13: delta watermark control table
     "proc_add_gl",
     "proc_add_ap",
     "proc_sync_links",
@@ -51,6 +52,10 @@ def validate_config(cfg: dict) -> None:
 
 
 def resolve_secret(name: str, env=None) -> str:
+    # specs/14: `env` may be a SecretProvider (duck-typed) — delegate to it. Otherwise treat it as a
+    # plain dict / os.environ (legacy path, unchanged).
+    if getattr(env, "is_secret_provider", False):
+        return env.get(name)
     env = os.environ if env is None else env
     val = env.get(name)
     if val is None or val == "":

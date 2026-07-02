@@ -13,6 +13,8 @@ from xml.sax.saxutils import escape
 
 DEFAULT_DTD_VERSION = "3.0"
 DEFAULT_DATE_FORMAT = "%m/%d/%Y"
+DEFAULT_DATETIME_FORMAT = "%m/%d/%Y %H:%M:%S"    # specs/13: WHENMODIFIED filter (company tz)
+DEFAULT_MODIFIED_FIELD = "WHENMODIFIED"
 
 # Blank placeholder creds keep the builders pure/testable without secrets; callers pass real
 # creds= when wiring. (Credentials live in the <control> block; the session id authenticates
@@ -26,6 +28,9 @@ GL_DEFAULT_FIELDS = [
 ]
 GL_DEFAULT_ORDER = ["AUWHENCREATED", "RECORDNO", "LINE_NO"]
 
+GL_KEY_FIELDS = ["RECORDNO", "LINE_NO"]           # specs/13 sweep: natural key only
+AP_KEY_FIELDS = ["RECORDNO"]
+
 AP_PROBE_FIELDS = ["MEGAENTITYID", "RECORDNO", "RECORDID", "STAMPLI_LINK"]
 AP_PAGE_FIELDS = [
     "MEGAENTITYID", "RECORDNO", "RECORDID", "VENDORID", "VENDORNAME",
@@ -37,6 +42,11 @@ AP_DEFAULT_ORDER = ["RECORDNO"]
 def fmt_date(d: date, date_format: str = DEFAULT_DATE_FORMAT) -> str:
     """Sage filter date format (default MM/DD/YYYY; configurable)."""
     return d.strftime(date_format)
+
+
+def fmt_datetime(dt, datetime_format: str = DEFAULT_DATETIME_FORMAT) -> str:
+    """Sage filter datetime format (default MM/DD/YYYY HH:MM:SS; configurable). specs/13."""
+    return dt.strftime(datetime_format)
 
 
 def _x(value) -> str:
@@ -185,6 +195,156 @@ def build_ap_query_xml(
         f"<value>{_x(fmt_date(end, date_format))}</value></lessthanorequalto>"
         "</and>"
     )
+    options_extra = "<showprivate>true</showprivate>" if show_private else ""
+    return _query_xml(
+        creds, session_id=session_id, obj="APBILL", fields=fields,
+        filter_xml=filter_xml, order_by=order_by, offset=offset,
+        page_size=page_size, options_extra=options_extra, return_json=return_json,
+        dtd_version=dtd_version,
+    )
+
+
+def _date_window_filter(field: str, start, end, date_format: str) -> str:
+    """`field >= start AND field <= end` on a date field (inclusive window)."""
+    return (
+        f"<greaterthanorequalto><field>{_x(field)}</field>"
+        f"<value>{_x(fmt_date(start, date_format))}</value></greaterthanorequalto>"
+        f"<lessthanorequalto><field>{_x(field)}</field>"
+        f"<value>{_x(fmt_date(end, date_format))}</value></lessthanorequalto>"
+    )
+
+
+def build_gl_keys_query_xml(
+    *,
+    session_id: str,
+    start: date,
+    end: date,
+    offset: int,
+    page_size: int,
+    fields=None,
+    order_by=None,
+    date_field: str = "ENTRY_DATE",
+    book_filter: str = "ACCRUAL",
+    return_json: bool,
+    creds: dict | None = None,
+    date_format: str = DEFAULT_DATE_FORMAT,
+    dtd_version: str = DEFAULT_DTD_VERSION,
+) -> str:
+    """GL keys-only query for the delete-sweep: RECORDNO+LINE_NO, ENTRY_DATE window, BOOKID=ACCRUAL."""
+    fields = fields or GL_KEY_FIELDS
+    order_by = order_by or GL_DEFAULT_ORDER
+    creds = creds or _BLANK_CREDS
+    filter_xml = (
+        "<and>"
+        + _date_window_filter(date_field, start, end, date_format)
+        + f"<equalto><field>BOOKID</field><value>{_x(book_filter)}</value></equalto>"
+        + "</and>"
+    )
+    return _query_xml(
+        creds, session_id=session_id, obj="GLDETAIL", fields=fields,
+        filter_xml=filter_xml, order_by=order_by, offset=offset,
+        page_size=page_size, return_json=return_json, dtd_version=dtd_version,
+    )
+
+
+def build_ap_keys_query_xml(
+    *,
+    session_id: str,
+    start: date,
+    end: date,
+    offset: int,
+    page_size: int,
+    fields=None,
+    order_by=None,
+    date_field: str = "WHENPOSTED",
+    return_json: bool,
+    creds: dict | None = None,
+    date_format: str = DEFAULT_DATE_FORMAT,
+    dtd_version: str = DEFAULT_DTD_VERSION,
+) -> str:
+    """AP keys-only query for the delete-sweep: RECORDNO, WHENPOSTED window."""
+    fields = fields or AP_KEY_FIELDS
+    order_by = order_by or AP_DEFAULT_ORDER
+    creds = creds or _BLANK_CREDS
+    filter_xml = "<and>" + _date_window_filter(date_field, start, end, date_format) + "</and>"
+    return _query_xml(
+        creds, session_id=session_id, obj="APBILL", fields=fields,
+        filter_xml=filter_xml, order_by=order_by, offset=offset,
+        page_size=page_size, return_json=return_json, dtd_version=dtd_version,
+    )
+
+
+def _modified_window_filter(field: str, since, until, datetime_format: str) -> str:
+    """`field > since AND field <= until` on a datetime field (specs/13 §13.4).
+
+    Strict lower bound (records strictly after the last cutoff) + inclusive upper bound (the
+    closed-time cutoff). Both values are XML-escaped datetime strings in the company tz.
+    """
+    return (
+        f"<greaterthan><field>{_x(field)}</field>"
+        f"<value>{_x(fmt_datetime(since, datetime_format))}</value></greaterthan>"
+        f"<lessthanorequalto><field>{_x(field)}</field>"
+        f"<value>{_x(fmt_datetime(until, datetime_format))}</value></lessthanorequalto>"
+    )
+
+
+def build_gl_delta_query_xml(
+    *,
+    session_id: str,
+    since,
+    until,
+    offset: int,
+    page_size: int,
+    fields=None,
+    order_by=None,
+    modified_field: str = DEFAULT_MODIFIED_FIELD,
+    book_filter: str = "ACCRUAL",
+    return_json: bool,
+    creds: dict | None = None,
+    datetime_format: str = DEFAULT_DATETIME_FORMAT,
+    dtd_version: str = DEFAULT_DTD_VERSION,
+) -> str:
+    """GL delta query: filter on WHENMODIFIED window only (no posting-date window) + BOOKID.
+
+    Selects the same field set as the full-load GL query so the bulk proc mapping is unchanged.
+    """
+    fields = fields or GL_DEFAULT_FIELDS
+    order_by = order_by or GL_DEFAULT_ORDER
+    creds = creds or _BLANK_CREDS
+    filter_xml = (
+        "<and>"
+        + _modified_window_filter(modified_field, since, until, datetime_format)
+        + f"<equalto><field>BOOKID</field><value>{_x(book_filter)}</value></equalto>"
+        + "</and>"
+    )
+    return _query_xml(
+        creds, session_id=session_id, obj="GLDETAIL", fields=fields,
+        filter_xml=filter_xml, order_by=order_by, offset=offset,
+        page_size=page_size, return_json=return_json, dtd_version=dtd_version,
+    )
+
+
+def build_ap_delta_query_xml(
+    *,
+    session_id: str,
+    since,
+    until,
+    offset: int,
+    page_size: int,
+    fields=None,
+    order_by=None,
+    modified_field: str = DEFAULT_MODIFIED_FIELD,
+    show_private: bool = True,
+    return_json: bool,
+    creds: dict | None = None,
+    datetime_format: str = DEFAULT_DATETIME_FORMAT,
+    dtd_version: str = DEFAULT_DTD_VERSION,
+) -> str:
+    """AP Bill delta query: filter on WHENMODIFIED window only; showprivate option; no BOOKID."""
+    fields = fields or AP_PAGE_FIELDS
+    order_by = order_by or AP_DEFAULT_ORDER
+    creds = creds or _BLANK_CREDS
+    filter_xml = "<and>" + _modified_window_filter(modified_field, since, until, datetime_format) + "</and>"
     options_extra = "<showprivate>true</showprivate>" if show_private else ""
     return _query_xml(
         creds, session_id=session_id, obj="APBILL", fields=fields,

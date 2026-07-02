@@ -17,6 +17,10 @@ from .config import assert_test_sql_targets, safe_identifier
 from .pagination import DEFAULT_PAGE_SIZE
 
 
+class SweepGuardError(Exception):
+    """Raised when a delete-sweep would remove more than the configured fraction of scanned rows."""
+
+
 @dataclass
 class LoaderMetrics:
     """Per-loader (per-environment) load metrics for the audit trail (specs/12)."""
@@ -30,6 +34,9 @@ class LoaderMetrics:
     ap_db_s: float = 0.0
     wipe_s: float = 0.0
     reconcile_s: float = 0.0
+    gl_deleted: int = 0                  # specs/13 delete-sweep counts
+    ap_deleted: int = 0
+    sweep_s: float = 0.0
 
     def record_page(self, kind: str, *, encode_s: float, db_s: float, affected: int) -> None:
         setattr(self, f"{kind}_pages", getattr(self, f"{kind}_pages") + 1)
@@ -117,6 +124,74 @@ class SqlLoader:
         self.metrics.wipe_s += self.clock() - t0
         if commit:
             self.conn.commit()
+
+    # -- delta delete-sweep (specs/13 §13.5): delete SQL rows absent from Intacct's key set --
+
+    @staticmethod
+    def _guard_mass_delete(kind: str, missing: int, scanned: int, fraction) -> None:
+        """Abort a sweep that would delete more than `fraction` of the scanned rows (specs/13 §13.5).
+
+        Defense-in-depth against a mis-scoped/partial key set silently wiping a window. Raises rather
+        than deleting; the caller's transaction rolls back and the run is flagged/alerted.
+        """
+        if fraction is None or scanned <= 0:
+            return
+        if missing > fraction * scanned:
+            raise SweepGuardError(
+                f"{kind} sweep would delete {missing}/{scanned} rows "
+                f"(> {fraction:.0%} guard); aborting — investigate the Intacct key pull"
+            )
+
+    def sweep_gl(self, present_keys, start, end, *, commit: bool = True,
+                 max_delete_fraction=None) -> int:
+        """Delete GL rows in the Entry_Date window whose natural key is NOT in `present_keys`.
+
+        `present_keys` = set of key tuples (as strings) currently in Intacct. Reads the SQL keys in
+        the window, deletes only those missing from Intacct (never inserts/updates). Returns count.
+        """
+        gl = self._ident("gl_table")
+        field = safe_identifier(self.cfg.get("gl_delete_date_field", "Entry_Date"))
+        cols = [safe_identifier(c) for c in self.cfg.get("gl_key_columns", ["Record_No", "Line_No"])]
+        collist = ", ".join(cols)
+        where = " AND ".join(f"{c} = ?" for c in cols)
+        t0 = self.clock()
+        with closing(self.conn.cursor()) as cur:
+            cur.execute(f"SELECT {collist} FROM {gl} WHERE {field} >= ? AND {field} <= ?", (start, end))
+            rows = cur.fetchall()
+            missing = [tuple(r) for r in rows if tuple(str(x) for x in r) not in present_keys]
+            self._guard_mass_delete("GL", len(missing), len(rows), max_delete_fraction)
+            for key in missing:
+                cur.execute(f"DELETE FROM {gl} WHERE {where}", tuple(key))
+        self.metrics.gl_deleted += len(missing)
+        self.metrics.sweep_s += self.clock() - t0
+        if commit:
+            self.conn.commit()
+        return len(missing)
+
+    def sweep_ap(self, present_keys, start, end, *, date_field, commit: bool = True,
+                 max_delete_fraction=None) -> int:
+        """Delete AP rows in the `date_field` window whose key is NOT in `present_keys`.
+
+        AP is windowed exactly like GL (on a real date column) so history outside the window is never
+        touched — this respects the accumulate rule (specs/13 §13.9). The caller must only invoke this
+        when a date column exists (`apbill_sweep_date_field`); there is no destructive full-table mode.
+        """
+        ap = self._ident("apbill_table")
+        col = safe_identifier(self.cfg.get("ap_key_column", "Record_No"))
+        dfield = safe_identifier(date_field)
+        t0 = self.clock()
+        with closing(self.conn.cursor()) as cur:
+            cur.execute(f"SELECT {col} FROM {ap} WHERE {dfield} >= ? AND {dfield} <= ?", (start, end))
+            rows = cur.fetchall()
+            missing = [tuple(r) for r in rows if tuple(str(x) for x in r) not in present_keys]
+            self._guard_mass_delete("AP", len(missing), len(rows), max_delete_fraction)
+            for key in missing:
+                cur.execute(f"DELETE FROM {ap} WHERE {col} = ?", tuple(key))
+        self.metrics.ap_deleted += len(missing)
+        self.metrics.sweep_s += self.clock() - t0
+        if commit:
+            self.conn.commit()
+        return len(missing)
 
     def run_reconcile(self, start, end, *, commit: bool = True) -> None:
         """Post-load reconcile: sync AP links then update vendor info (specs/04 FR-LOAD-3).

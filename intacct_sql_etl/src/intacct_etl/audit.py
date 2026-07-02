@@ -43,6 +43,8 @@ class EnvAudit:
     ap_rows_affected: int = 0
     gl_pages: int = 0
     ap_pages: int = 0
+    gl_deleted: int = 0                  # specs/13 delete-sweep counts
+    ap_deleted: int = 0
     failed: int = 0
     extract_s: float = 0.0
     transform_s: float = 0.0
@@ -69,11 +71,16 @@ class EnvAudit:
     def total_affected(self) -> int:
         return self.gl_rows_affected + self.ap_rows_affected
 
+    @property
+    def total_deleted(self) -> int:
+        return self.gl_deleted + self.ap_deleted
+
     def to_dict(self) -> dict:
         d = asdict(self)
         d["total_read"] = self.total_read
         d["total_loaded"] = self.total_loaded
         d["total_affected"] = self.total_affected
+        d["total_deleted"] = self.total_deleted
         return d
 
 
@@ -98,6 +105,7 @@ class RunAudit:
             "read": sum(e.total_read for e in self.environments),
             "loaded": sum(e.total_loaded for e in self.environments),
             "rows_affected": sum(e.total_affected for e in self.environments),
+            "deleted": sum(e.total_deleted for e in self.environments),
             "failed": sum(e.failed for e in self.environments),
             "gl_read": sum(e.gl_read for e in self.environments),
             "ap_read": sum(e.ap_read for e in self.environments),

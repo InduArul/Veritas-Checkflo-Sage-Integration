@@ -8,10 +8,10 @@ Resolve these before coding the affected area. Owner in brackets.
   reuse the procs as-is (default), or port to Python? Until captured, the GL/AP column mappings are
   proc-defined, not in this spec.
 
-- **OQ-2 [DBA/user] GL delete vs extract date field.** Mainflow deletes `GLTable` on **`Entry_Date`**
-  (module 135) but the Sage GL extract filters on **`BATCH_DATE`** (module 18). Are these the same basis?
-  If not, the delete window and the reload window can diverge (orphan/duplicate rows). Confirm intended
-  field for both.
+- **OQ-2 [DBA/user] GL window date field. — RESOLVED 2026-07-02 (project owner):** use **`Entry_Date`**
+  for the maintained window (matches the current project). Under the delta CR (`specs/13`) the upsert
+  filters on `WHENMODIFIED` (change field), and the **delete-sweep window is defined on `Entry_Date`**
+  on both the Intacct and SQL sides.
 
 - **OQ-3 [DBA] Unicode literal asymmetry.** GL uses `N'…'` (NVARCHAR) but AP uses `'…'` for the `@json`
   literal. Incidental or meaningful (non-ASCII vendor names/descriptions)? Rebuild will bind Unicode-safe
@@ -45,6 +45,35 @@ Resolve these before coding the affected area. Owner in brackets.
 - **OQ-11 [DBA] SQL credentials & auth mode.** The POC was blocked on SQL login (Memory_Opti §8): Azure
   SQL + AAD vs on-prem + SQL auth unknown; Make's stored creds are redacted. Need working creds + auth
   mode before any load test (`sql.auth_mode`, `sql.username/password` or AAD token).
+  - **Partially resolved 2026-06-30 (IT):** Target SQL Server = **`VPASQL01`**, **standard port 1433**.
+    IT verified from the Ubuntu VM (`VTSAzPLW01`) that the TCP port to VPASQL01 **accepts traffic** — the
+    network path is open. (The separate PostgreSQL Flexible Server on 5432 is unrelated — ignore.)
+    **Still outstanding:** (a) a working **SQL login** (SQL-auth user+password, or AAD/managed-identity),
+    (b) confirm VPASQL01 is a default instance on 1433 (not named) + FQDN/IP, (c) ODBC Driver 18 install
+    on the VM (sudo). Until (a) lands, no live connect possible despite the open port.
+  - **2026-06-30 live connection test — FAILED (login timeout). Two concrete blockers found:**
+    1. **Name resolution:** `VPASQL01` does **not resolve** from the VM (no DNS entry; resolv.conf search
+       domain is Azure `reddog.microsoft.com`; no `/etc/hosts` entry). `getaddrinfo: Temporary failure in
+       name resolution` for `VPASQL01`, `.veritas.local`, `.veritashs.com`. IT's port test must have used
+       an IP / been run server-side — by name from this VM it cannot connect.
+    2. **Named instance:** config server is `VPASQL01\SQLEXPRESS` — a **named** SQL Express instance, which
+       needs **SQL Browser (UDP 1434)** or a **static TCP port**. Plain TCP 1433 reachability does not prove it.
+    - **Fix / ask IT:** provide VPASQL01's **IP** + the **static TCP port** SQLEXPRESS listens on (or confirm
+      UDP 1434 open). Then on Linux prefer `sql.server: "<IP>,<port>"` (host,port form — bypasses DNS *and*
+      SQL Browser), optionally add `<IP> VPASQL01` to `/etc/hosts`. Config/driver/secret are otherwise validated OK.
+    - **Note:** `test_` **stored-proc** existence still unverified (the connection test that checks them
+      couldn't reach the DB). Re-run that check once the host is reachable.
+  - **2026-06-30 (IP supplied: `40.75.111.131:1433`) — still FAILS: network path blocked.** Switched
+    `sql.server` to the host,port form `"40.75.111.131,1433"` (bypasses DNS + SQL Browser). Findings:
+    - VM private IP `10.88.102.40`; **VM public egress IP `135.224.198.106`** (so `40.75.111.131` is *not*
+      the VM itself — it is a genuinely separate host). Outbound **443 to Sage works** (egress is fine).
+    - **TCP `40.75.111.131:1433` and `:1434` both TIME OUT** (packets silently dropped → firewall/NSG,
+      not a closed port). Route is correct (`via 10.88.102.1 dev eth0`).
+    - **Diagnosis = firewall/NSG block on the SQL side**, not an app problem. App side is fully ready
+      (driver/config/secret/validation all green). **Ask IT:** preferably give the SQL server's **private
+      IP** and open its NSG + Windows firewall for inbound TCP 1433 from `10.88.102.40` (intra-VNet);
+      otherwise open inbound 1433 on `40.75.111.131` from egress IP `135.224.198.106`. Confirm SQLEXPRESS
+      listens on **static** TCP 1433. (IT's earlier "port accepting traffic" check was not from this VM's path.)
 
 - **OQ-12 [user] Env source of truth.** Today environments come from `Config.xlsx`/`Env_data`. Move to
   the YAML `environments[]` (default), or keep reading the Excel file? List the current env names (sample
@@ -67,3 +96,68 @@ Resolve these before coding the affected area. Owner in brackets.
 - **OQ-13 [DBA] GL count `numremaining+1`.** Confirm this correctly equals total rows in all cases (it
   assumes the pagesize-1 probe returns 1 row + N remaining). Edge case: zero-row windows → numremaining=0
   → total=1 but no data; the `length(data)>0` guard handles it, but verify the page loop count.
+
+- **OQ-16 [user/DBA] `WHENMODIFIED` timezone** (delta CR, `specs/13`). **RESOLVED 2026-07-02: company timezone.**
+  (OQ-16b: confirm exact datetime string format at build time for a boundary-safe round-trip.)
+
+- **OQ-17 [user] Delta schedule** (`specs/13`). Confirm 08:00 / 17:30 upserts + 01:00 nightly (sweep+upsert)
+  + 1st-of-month monthly (wide sweep+upsert); timezone/active weekdays (see also OQ-8).
+
+- **OQ-18 [user] Retention purge** (`specs/13`; **user action item**). Decide if/when to purge history older
+  than the window. Tables accumulate for now; purge built as an OFF-by-default toggle until confirmed.
+
+- **OQ-19 [user] Seed depth** (`specs/13`). **RESOLVED 2026-07-02:** prod already has data from 2024-01-01
+  (no prod seed); seed **`test_`** tables from 2024-01-01 → now to mirror live for parity.
+
+- **OQ-20 [DBA] GL/AP hard-deletes. — RESOLVED 2026-07-02 (client).** Governed by the accounting period:
+  **OPEN period → hard delete** (record disappears); **CLOSED period → reversal only** (original stays, new
+  reversing entry added; some AP cases are reversal-only regardless). ⇒ Hard deletes occur ONLY in open
+  (recent) periods; closed/old periods are never hard-deleted, only reversed (reversals = new rows caught by
+  the delta upsert). IMPLICATION: the delete-sweep only needs to cover the **open period(s)**; the current
+  GL windows (daily ~4-mo / monthly wide) comfortably cover them, and accumulate of old data is safe (old
+  data is never deleted in Intacct). ASSUMPTION to watch: the sweep window must always span all currently-open
+  periods — fine unless a period stays open longer than the daily window (~3-4 months).
+
+- **OQ-21 [user] Delta `grace` interval** (`specs/13`). **RESOLVED 2026-07-02: 1 hour.**
+
+- **OQ-26 [DBA] AP sweep needs a date column** (`specs/13` §13.5). **Now a real dependency for AP delete
+  reconciliation.** APBillTable has no date column, so a full-table AP sweep is unsafe (would delete
+  historical bills Intacct no longer returns — breaks accumulate). Until the DBA adds a date column (e.g.
+  `When_Posted`, populated by `test_AddAPBillBulk` from WHENPOSTED) and it's set as `sql.apbill_sweep_date_field`,
+  **AP delete-sweep is SKIPPED** (upsert of AP still works; only detection of AP *deletions* is deferred).
+  GL is unaffected (windowed on Entry_Date). Mass-delete guard (`sweep_max_delete_fraction`, default 0.5)
+  protects both.
+
+- **OQ-27 [IT] Mailbox send method** (`specs/14`; = C5). Graph `sendMail` (app registration) vs basic SMTP
+  AUTH for `timeclockplus@veritashcsolutions.com` — sets `notify.transport`.
+
+- **OQ-28 [IT] SharePoint read access** (`specs/14`; = C6). Managed identity / app-registration scope to read
+  `Config.xlsx` (Sheet1/Table1). Until granted, `recipient_source: config`.
+
+- **OQ-29 [user] Report cadence/branding** (`specs/14`). One daily success email (default) vs per-run; any
+  subject convention/logo. Default: one email per run, plain HTML.
+
+- **OQ-30 [user/DBA] Pre-flight strictness** (`specs/14`). On SQL auth failure: abort whole run + alert
+  (default, fail-fast) vs continue and fail per-env.
+
+- **OQ-22 [user/IT] Secret store = Azure Key Vault + VM Managed Identity** (`specs/14`). **DECISION 2026-07-02:
+  do NOT block the build on the vault.** Build behind a swappable `SecretProvider` interface; default impl =
+  env/`.env` (chmod 600, as today); **repoint to Key Vault later** with no code change. When IT is ready:
+  create vault, enable VM managed identity ("Key Vault Secrets User"), grant **Diana** (quarterly rotator)
+  "Key Vault Secrets Officer", store `sql-password` + email creds. (SQL login expires every 3 months — B1.)
+
+- **OQ-25 [user/IT] Recipient/config source = SharePoint `Config.xlsx`** (`…/Intacct SQL Feeds/Config.xlsx`).
+  Notifier reads the recipient list from there at runtime (team self-serves). Same "build now, repoint later"
+  approach: swappable `RecipientSource`, default = config list, switch to SharePoint read once **C6** access is
+  granted. **Safeguards:** cache last-known-good list locally + a fallback admin address so a SharePoint-read
+  failure never blocks a failure alert. **D1a RESOLVED 2026-07-02:** recipients in `Config.xlsx` → sheet
+  **`Sheet1`**, table **`Table1`**; **one shared list** for both failure alerts and the daily report (read
+  the Table1 rows via Graph workbook API). (Ties to OQ-12: `Config.xlsx`/`Env_data` is also the current env source.)
+
+- **OQ-23 [ops] Log/audit retention = 1 week** (confirmed 2026-07-02). Implement logrotate (weekly) + prune
+  `audit/*.json` older than 7 days.
+
+- **OQ-24 [user] Email notifier** (confirmed 2026-07-02). Send **from** `timeclockplus@veritashcsolutions.com`;
+  store mailbox credentials in Key Vault. Prefer Graph `sendMail` (app registration) over basic SMTP AUTH
+  (M365 is retiring basic auth) — confirm which the mailbox supports (C5). Still need **D1** = recipient list
+  for (a) failure alerts and (b) daily success report.
