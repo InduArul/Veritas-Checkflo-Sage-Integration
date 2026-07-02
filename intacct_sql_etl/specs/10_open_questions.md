@@ -120,13 +120,13 @@ Resolve these before coding the affected area. Owner in brackets.
 
 - **OQ-21 [user] Delta `grace` interval** (`specs/13`). **RESOLVED 2026-07-02: 1 hour.**
 
-- **OQ-26 [DBA] AP sweep needs a date column** (`specs/13` §13.5). **Now a real dependency for AP delete
-  reconciliation.** APBillTable has no date column, so a full-table AP sweep is unsafe (would delete
-  historical bills Intacct no longer returns — breaks accumulate). Until the DBA adds a date column (e.g.
-  `When_Posted`, populated by `test_AddAPBillBulk` from WHENPOSTED) and it's set as `sql.apbill_sweep_date_field`,
-  **AP delete-sweep is SKIPPED** (upsert of AP still works; only detection of AP *deletions* is deferred).
-  GL is unaffected (windowed on Entry_Date). Mass-delete guard (`sweep_max_delete_fraction`, default 0.5)
-  protects both.
+- **OQ-26 [DBA] AP sweep date column. — APPROVED 2026-07-02 (client).** DBA will add a date column to the
+  AP bill table (we recommend `When_Posted DATE`, populated from `WHENPOSTED`) + update `test_AddAPBillBulk`
+  to map it. Then set `sql.apbill_sweep_date_field: When_Posted` → windowed AP sweep turns on (safe, like GL).
+  Client also **explicitly reconfirmed accumulate: old data must NOT be deleted, stays in SQL** — our
+  windowed sweep already honours this. Until the column lands, AP delete-sweep stays SKIPPED (AP upsert
+  works; only AP *deletion* detection deferred). Code prep: add `WHENPOSTED` to the AP select set so the
+  payload carries it (harmless to the current proc; OPENJSON ignores unmapped keys).
 
 - **OQ-27 [IT] Mailbox send method** (`specs/14`; = C5). Graph `sendMail` (app registration) vs basic SMTP
   AUTH for `timeclockplus@veritashcsolutions.com` — sets `notify.transport`.

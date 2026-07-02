@@ -38,13 +38,13 @@ current project, which has worked well).
 _Why: nice to know. Not critical — our tables can always be rebuilt from Intacct if needed._
 > Answer:
 
-**B5. Can you add a date column (e.g. `When_Posted`) to the AP bill table and have the AP load
-procedure populate it?**
-_Why: the GL table has an entry-date column, so we can safely detect and remove only bills deleted in
-the recent window. The AP bill table has no date column, so until it has one we can't safely reconcile
-AP deletions (removing them could wrongly delete old bills we want to keep). Everything else for AP
-still works — this only affects catching AP bills that were deleted in Intacct._
-> Answer:
+**B5. ✅ APPROVED (client 2026-07-02):** the DBA will **add a date column to the AP bill table** (we'll
+populate it from the bill's posting date, Intacct `WHENPOSTED`). This enables the safe, windowed AP
+delete-sweep. Client also **explicitly reconfirmed: old data must NOT be deleted — it stays in SQL**
+(accumulate). Our windowed sweep already honours this (it only ever looks at the recent window; old
+rows are never read or deleted).
+> Remaining: DBA to (a) add the column (suggested name `When_Posted DATE`), (b) update
+> `test_AddAPBillBulk` to map `WHENPOSTED` → that column. Then we set `sql.apbill_sweep_date_field`.
 
 ---
 

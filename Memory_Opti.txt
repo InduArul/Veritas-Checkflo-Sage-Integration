@@ -718,7 +718,68 @@ G) BUILD STARTED 2026-07-02 (TDD, WAVES). Baseline 155 tests -> now 169 green.
        (--mode full backfill); shadow-run --mode upsert then sweep-upsert; reconcile test_ vs Sage
        authoritative + Make prod; confirm OQ-16b (WHENMODIFIED datetime string/format); schedule cron
        (08:00/17:30 upsert; 01:00 + monthly sweep-upsert) with flock + failure email.
-   [ ] Team OQs outstanding: B4 (backup), B5 (add date col to APBillTable -> enables AP sweep),
+   *** LIVE SHADOW VALIDATION on VM 2026-07-02 (delta engine PROVEN against real Sage+SQL) ***
+   Committed 2b10744, then DEPLOYED updated code to VM site-packages (backup .bak-20260702-predelta),
+   added delta keys to VM config.yaml (watermark_table/key cols/sweep_max_delete_fraction), created
+   dbo.test_etl_watermark via watermark.create_table_sql.
+   - 1st upsert (window 07/02, no changes today): gl=0 ap=0 ok=True; watermark advanced to 2026-07-02
+     06:08 LA = COMPANY TZ from a 13:08 UTC server -> CR-D6 tz fix PROVEN LIVE. Retry recovered a
+     transient Sage read timeout.
+   - Rewound watermark to 06-30 -> upsert pulled REAL delta: GL 38,593 + AP 839 = 39,432 upserted, ~4min.
+   - Immediate re-run: gl=0 ap=0 in 30s -> proves delta never re-processes unchanged data. Watermark
+     -> 06:17 LA.
+   - OBSERVATION: Sage API intermittently READ-TIMES-OUT (60s). One run exhausted retries -> env FAILED,
+     ROLLED BACK, watermark NOT advanced, ok=False (correct completeness-gate behavior; notifier would
+     alert). Bumped sage.request_timeout_s 60->120; re-run succeeded. Production must tolerate/alert +
+     auto-retry these (retry count=3 helps; a re-run usually clears it).
+   AP DATE COLUMN (B5/OQ-26) LIVE: DBA added When_Posted DATE to test_APBillTable + updated
+   test_AddAPBillBulk (parse WHENPOSTED -> map When_Posted in MERGE) — verified. My STEP 2 code:
+   added WHENPOSTED to AP_PAGE_FIELDS (sage_query) so payload carries it (test added; 234->235 green);
+   redeployed. Re-loaded AP -> When_Posted populated on 839 rows (range 01-31..07-31); 365 older rows
+   NULL (safely excluded from windowed sweep). Set config sql.apbill_sweep_date_field: When_Posted.
+   [ ] sweep-upsert validation in progress (expect AP sweep now RUNS windowed, ap_del=0 = nothing
+       wrongly deleted). Then commit step-2 code.
+
+   -------------------------------------------------------------------------------
+   STOP POINT — 2026-07-02 EOD (resume tomorrow)
+   -------------------------------------------------------------------------------
+   BENCHMARK (client FYI): the CURRENT Make daily feed = 5 runs, ~59 MINUTES total (full
+   delete+reload of ~4-month/~640k GL rows). Our delta: intraday upsert ~30s (no changes) /
+   ~4min (2-day backlog); heavy ~640k work moves to a keys-only NIGHTLY sweep. = the runtime/ops win.
+
+   WHERE WE STOPPED: validating the WINDOWED AP sweep. A full-window sweep-upsert was slow (~640k GL
+   key pull + intermittent Sage 60s read-timeouts). Decided to re-validate over a SMALL 1-MONTH window
+   (June 2026) instead — but before running it, user called stop for the day.
+   JOBS: all LOCAL background tasks STOPPED. A remote sweep-upsert MAY still be running on the VM
+   (SSH went flaky/refusing under VM load, so kill unconfirmed). IT IS HARMLESS: writes only to test_
+   tables, rolls back on failure, never advances watermark unless fully successful, cannot touch prod.
+   It will self-terminate. FIRST THING TOMORROW: `ssh vtsvm "pkill -9 -f intacct_etl; pgrep -af intacct_etl"`
+   to confirm it's dead before resuming.
+
+   VM STATE (all set up, ready to resume):
+   - Updated delta code deployed to venv site-packages (backup .bak-20260702-predelta).
+   - config.yaml has delta keys + apbill_sweep_date_field: When_Posted + request_timeout_s bumped 60->120.
+   - dbo.test_etl_watermark created. Watermarks: GL ~2026-07-02 06:17 LA; AP ~06-30 (rewound) — may have
+     advanced if the orphan sweep committed; RE-CHECK tomorrow.
+   - test_APBillTable has When_Posted column populated on 839 recent rows (365 older = NULL, safely
+     excluded from windowed sweep).
+
+   RESUME PLAN TOMORROW (in order):
+   [ ] 1. Confirm no orphan process (pkill/pgrep). Check watermark table current values.
+   [ ] 2. Small-window AP-sweep validation: `intacct-etl --config config.yaml --mode sweep-upsert
+          --start 06/01/2026 --end 06/30/2026`. Expect: NO "AP sweep skipped" (it now runs windowed
+          on When_Posted); ap_del=0 / gl_del=0 (nothing wrongly deleted). Fast (~160k GL keys, 1 mo).
+   [ ] 3. If green -> the delta engine is fully live-validated (upsert + sweep, GL + AP).
+   [ ] 4. Reconcile a window: test_ counts vs Sage authoritative + vs Make prod (parity gate).
+   [ ] 5. OPERATIONAL: Sage read-timeouts are intermittent — confirm retry (count=3) + timeout=120
+          are enough; the nightly schedule must alert on failure (notifier) + tolerate a re-run.
+   [ ] 6. Then: team deps (C1-C6 KeyVault/mailbox/SharePoint), build Graph+SharePoint transports,
+          schedule cron (flock + failure email), sustained shadow, cutover.
+
+   COMMITTED TODAY: 2b10744 (delta engine + secrets/notifier). Step-2 (WHENPOSTED in AP payload) +
+   today's doc updates committed EOD (see next commit). 235 tests green.
+
+   [ ] Team OQs outstanding: B4 (backup), B5 DONE (AP date col added), C1-C6 (KeyVault/mailbox/SharePoint),
        C1-C6 (KeyVault/mailbox/SharePoint), D3 (schedule days/tz). See docs/TEAM_QUESTIONS.md.
 
    REGRESSION LOCKED 2026-07-02: tests/unit/test_sql_loader_sweep.py adds a DATE-AWARE fake

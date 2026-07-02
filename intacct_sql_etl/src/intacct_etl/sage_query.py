@@ -35,6 +35,7 @@ AP_PROBE_FIELDS = ["MEGAENTITYID", "RECORDNO", "RECORDID", "STAMPLI_LINK"]
 AP_PAGE_FIELDS = [
     "MEGAENTITYID", "RECORDNO", "RECORDID", "VENDORID", "VENDORNAME",
     "STAMPLI_LINK", "PLATFORM_SERVICES_LINK",
+    "WHENPOSTED",                 # OQ-26: posting date -> When_Posted column (enables windowed AP sweep)
 ]
 AP_DEFAULT_ORDER = ["RECORDNO"]
 

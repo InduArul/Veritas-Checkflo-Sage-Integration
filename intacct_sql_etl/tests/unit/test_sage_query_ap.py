@@ -47,3 +47,17 @@ def test_ap_page_has_seven_fields_probe_has_four():
     assert "<field>STAMPLI_LINK</field>" in probe_xml
     assert "RECORDNO" in sage_query.build_ap_query_xml.__doc__ or True   # smoke
     assert "<order><field>RECORDNO</field><ascending /></order>" in page_xml
+
+
+def test_ap_default_page_and_delta_carry_whenposted():
+    # OQ-26/step-2: WHENPOSTED must be in the AP payload (default field set) so the load proc can
+    # populate the new When_Posted column. Uses the DEFAULT field set (no explicit `fields`).
+    from datetime import datetime
+    page = sage_query.build_ap_query_xml(
+        session_id="SID", start=date(2024, 1, 1), end=date(2024, 3, 31),
+        offset=0, page_size=2000, return_json=True)
+    delta = sage_query.build_ap_delta_query_xml(
+        session_id="SID", since=datetime(2026, 7, 1), until=datetime(2026, 7, 2),
+        offset=0, page_size=2000, return_json=True)
+    assert "<field>WHENPOSTED</field>" in page
+    assert "<field>WHENPOSTED</field>" in delta
