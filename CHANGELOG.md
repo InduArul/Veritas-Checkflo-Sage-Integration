@@ -5,6 +5,24 @@ Each entry corresponds to a git commit.
 
 ## [Unreleased]
 
+### 2026-07-05
+- **intacct_sql_etl — bounded-memory chunked delta (specs/13 §13.16, NFR-MEM-1).** Root-caused the
+  2026-07-02 VM overload: `sage_client._fetch()` accumulates the whole window into one in-memory list,
+  so a wide delta `sweep-upsert` (~600k GL keys) exhausted the swapless, shared VM and starved sshd.
+  Fix: `orchestrator._process_environment_delta` now processes **both** the upsert (WHENMODIFIED axis)
+  and the delete-sweep (Entry_Date axis) in **calendar-month sub-chunks** — extract → apply → release
+  per chunk — so peak memory ≤ one chunk regardless of window span (the full-refresh path already did
+  this). New `dates.month_chunks_dt` (datetime tiling, shared month boundaries, exact for strict
+  `>lower`/`<=upper`) + `dates.group_chunks` (`run.chunk_months`, default 1). Watermark completeness
+  gate preserved (advances only if every chunk of an object fetched cleanly). TDD: `235 → 249` tests
+  (dates chunker + chunk-tiling + per-chunk interleaving/memory-safety + chunked-sweep parity).
+  Code review pass 3 — 0 open correctness findings. No behavioural change to which rows are processed.
+- **intacct_sql_etl — hardened run-wrapper (`deploy/run-etl.sh`).** Rootless operational guard so the
+  ETL can never overload the shared VM again: `flock` overlap guard (no stacked/orphan runs) + cgroup
+  `MemoryMax` via `systemd-run --user` (default 3G, `MemorySwapMax=0`, `ulimit -v` fallback) + wall-clock
+  `timeout`. A runaway is OOM-killed in its own cgroup (rc 137, `MEMORY CAP HIT` logged) without touching
+  the co-resident stampli stack or sshd. Proven on VTSAzPLW01 (pass-through, overlap-skip, 200M-cap kill).
+
 ### 2026-06-20
 - **Leak A refactor — Option B build (`leakA_refactor/`).** Merges the per-check Vendor→
   NegChecks→Loop chain (Part3+4+5) into a single `Part_345` sub-scenario and wires Part2 to

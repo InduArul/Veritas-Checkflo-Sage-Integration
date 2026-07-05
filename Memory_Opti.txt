@@ -819,3 +819,59 @@ G) BUILD STARTED 2026-07-02 (TDD, WAVES). Baseline 155 tests -> now 169 green.
    success; completeness gate (no advance on shortfall/error); audit insert/update/delete counts;
    parity test delta+sweep == full-refresh. Then specs/14 (secret provider + notifier).
 ================================================================================
+
+--------------------------------------------------------------------------------
+2026-07-05  —  VM OVERLOAD ROOT CAUSE + BOUNDED-MEMORY CHUNKING FIX + GUARDRAILS
+--------------------------------------------------------------------------------
+Resumed after the 2026-07-02 EOD stop ("SSH went flaky/refusing under VM load").
+
+1) VM HEALTH CHECK (07-05): box HEALTHY, self-recovered. load 0.00; NO orphan
+   intacct_etl proc; 15Gi RAM / 13Gi free; **Swap: 0B** (key finding); /data 12% used.
+   Watermarks consistent (Evergreen GL & AP both 2026-07-02 06:42); test_GLTable 65,530
+   / test_APBillTable 1,204. Prod untouched.
+
+2) ROOT CAUSE (confirmed by code, not inferred): sage_client._fetch() accumulates the
+   WHOLE window into one list (records.extend across all pages). The delta path
+   (_process_environment_delta) ran upsert over (since,cutoff] and sweep over [start,end]
+   in ONE shot -> a wide sweep-upsert (~640k GL keys) materialised everything at once.
+   On a SWAPLESS 15GB box shared with the stampli Docker stack, the RAM spike thrashed
+   the VM and starved sshd = the "overload". The full-refresh path already chunked
+   (dates.month_chunks); the delta path did NOT. NOT a CPU/data-correctness issue.
+
+3) GUARDRAILS (deploy/run-etl.sh, deployed+proven on VM, ROOTLESS): flock overlap guard
+   + cgroup MemoryMax via `systemd-run --user` (default 3G, MemorySwapMax=0, ulimit -v
+   fallback for cron w/o user bus) + wall-clock `timeout`. Tests on VM: pass-through rc0;
+   overlap-held -> SKIP rc0; 200M cap vs 600M hog -> OOM-killed rc137 in its OWN cgroup
+   (box/stampli/sshd unaffected) + "MEMORY CAP HIT" logged. SWAP FILE still needs IT/root
+   (deferred, belt-and-suspenders; the cap already protects the box).
+
+4) FIX — bounded-memory chunking (spec-first, TDD, WAVES; specs/13 §13.16 NFR-MEM-1):
+   - dates.month_chunks_dt(start_dt,end_dt): datetime month-tiling for the WHENMODIFIED
+     (upsert) axis; shared month-start boundaries -> exact under strict >lower/<=upper
+     (no gap/double-count). dates.group_chunks(chunks,n): merges n months (run.chunk_months,
+     default 1) preserving the union range.
+   - orchestrator._process_environment_delta: upsert loops month_chunks_dt(since,cutoff);
+     sweep loops month_chunks(start,end); each chunk extract->apply->`del` (release). GL/AP
+     use separate watermarks/chunk lists. Completeness gate preserved: advance watermark to
+     cutoff only if EVERY chunk of that object fetched cleanly. Reconcile still once/window.
+   - Tests 235 -> 249: month_chunks_dt (6) + group_chunks (3) unit; delta chunk-tiling,
+     per-chunk fetch->apply INTERLEAVING (memory-safety proof), chunked-sweep parity.
+     test_orchestrator_delta fakes rewritten WINDOW-AWARE (records carry _mod/_date) so a
+     chunked run returns the same union a single pass would.
+   - CODE REVIEW pass 3 (docs/CODE_REVIEW.md): 0 open correctness findings. Independent
+     subagent review AGREED (verified tiling/gate/no-unbound-var). Findings CR-M1..M5 all
+     accepted/no-change (CR-M1 = per-chunk empty-key-pull skip is intended per §13.16).
+
+5) DEPLOYED to VM venv site-packages (dates.py + orchestrator.py; backups
+   .bak-20260705-prechunk). Import verified (month_chunks_dt/group_chunks present; delta has
+   chunk loop). config.yaml: mode via CLI, chunk_months default 1, apbill_sweep_date_field=
+   When_Posted, sweep_max_delete_fraction 0.5.
+
+6) *** PENDING (blocked on VPN) ***: the live peak-RSS proof run
+   (`intacct-etl --mode sweep --start 05/01/2026 --end 07/31/2026` under the 3G cap w/
+   /usr/bin/time -v) did NOT complete — Azure VPN dropped mid-session (ssh 10.88.102.40:22
+   Connection timed out, exit 255; NOT a VM overload — box was idle/healthy just before).
+   RESUME when VPN up: run that command, confirm "Maximum resident set size" is bounded
+   (~one month of keys, well under 3G) and flat vs a 1-month run -> then broader shadow +
+   schedule cron via run-etl.sh (flock+cap) + reconcile vs Make -> cutover after sign-off.
+================================================================================

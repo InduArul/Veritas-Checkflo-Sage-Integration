@@ -13,6 +13,10 @@ run:
   daily_lookback_months: 3            # daily window start = 1st of (N months ago)
   monthly_start_rule: jan1_last_year  # monthly window start
   chunk: calendar_month               # slice the window into calendar-month chunks
+  chunk_months: 1                     # specs/13 §13.16: delta upsert+sweep process this many calendar
+                                      #   months per pass (extract->apply->release). 1 = tightest memory
+                                      #   bound (one month live); higher = fewer Sage round-trips, more RAM.
+                                      #   Does NOT change which rows are processed — only peak memory.
   reconcile_granularity: per_chunk    # per_chunk (Make default) | per_window  (OQ-4)
   date_format: "%m/%d/%Y"             # MM/DD/YYYY (Sage + proc params)
 

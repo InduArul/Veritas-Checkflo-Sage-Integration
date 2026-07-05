@@ -239,3 +239,36 @@ Severity: 🔴 Critical · 🟠 Major · 🟡 Minor
 | — | — | (refuted) CachingRecipientSource "dead" on config path | **NO CHANGE** — cache+fallback is intentional defense; not a defect. |
 
 **Verification:** `python -m pytest -q` → **229 passed**.
+
+---
+
+## Review pass 3 — bounded-memory chunked delta (specs/13 §13.16)
+
+**Date:** 2026-07-05. **Method:** manual adversarial review (logging / exception handling / resource
+mgmt / dead code / naming-DRY / injection) + full suite. **Trigger:** 2026-07-02 VM overload —
+`sage_client._fetch()` accumulates the whole window into one list; a wide delta `sweep-upsert`
+(~600k GL keys) exhausted a swapless shared VM. **Scope:** `dates.month_chunks_dt` +
+`dates.group_chunks` (new), `orchestrator._process_environment_delta` (upsert + sweep now loop
+calendar-month chunks, extract→apply→`del`→next), `run.chunk_months` config, `deploy/run-etl.sh`
+(operational cgroup/flock guard).
+
+**Outcome:** 5 findings — **0 open correctness**; all accepted/no-change with rationale + gating tests.
+
+> **STATUS: ✅ CLOSED — 0 open correctness findings.** Suite **249 green**.
+
+Severity: 🔴 Critical · 🟠 Major · 🟡 Minor
+
+| # | Sev | Finding | Disposition |
+|---|-----|---------|-------------|
+| CR-M1 | 🟡 | Empty-key-pull skip is now **per chunk**: a month whose Intacct key pull is empty is skipped, so a *fully-emptied* month's stale SQL rows would not be swept (differs from whole-window sweep, which would delete them as "missing"). | **ACCEPTED** — consistent with the existing mass-delete-guard philosophy (empty pull = suspicious, don't delete). Per OQ-20 hard-deletes occur only in **open** periods (which always have activity), so a fully-emptied GL month is not realistic. Specified in §13.16. Covered by `test_sweep_skipped_when_key_pull_is_empty`. |
+| CR-M2 | 🟡 | `sweep_max_delete_fraction` guard now evaluated **per chunk** (smaller row base) → tighter; a small month with a high *genuine* deletion fraction could trip `SweepGuardError` and roll the run back. | **ACCEPTED** — tighter guard is safer-by-default; the fraction is configurable, and a re-run after raising it recovers (idempotent). Documented in §13.16. |
+| CR-M3 | 🟡 | `month_chunks_dt(since, cutoff)` returns `[]` when `since >= cutoff` (watermark ≥1h ahead of cutoff, e.g. clock skew) → no fetch, but the completeness gate still advances the watermark to cutoff. | **NO CHANGE** — identical to the pre-chunk behaviour (it advanced unconditionally on a clean fetch); moving the watermark to cutoff only causes an idempotent re-pull next run. Not a regression. |
+| CR-M4 | 🟠 | Chunk-boundary partition correctness: could a record be dropped or double-counted at a month boundary? | **VERIFIED CORRECT** — `month_chunks_dt` yields shared boundaries `(since,b1](b1,b2]…(bn,cutoff]`; the builder filters strict `> lower` / `<= upper`, so a record at exactly `b1` is in chunk 1 only. Proven by `test_month_chunks_dt_*` + `test_chunked_sweep_parity_deletes_exactly_the_missing_union` + `test_upsert_streams_fetch_then_load_per_chunk_bounded_memory`. |
+| CR-M5 | 🟡 | Chunking multiplies Sage round-trips (one probe+paging per month) — a 30-month seed does 30 probes vs 1. | **ACCEPTED (perf)** — bounded memory is the priority; `chunk_months` raises the chunk size to trade RAM for fewer round-trips. Same disposition family as CR-D10. |
+
+**Injection/resource:** no new SQL string-building — sweep/upsert still bind dates + JSON as params,
+identifiers `safe_identifier`-validated; per-chunk `del` makes the release explicit; conn/loader still
+closed in `finally`. **Logging:** per-chunk warnings carry the chunk bounds. **DRY:** reuses the same
+`dates.month_chunks` tiling the full-refresh path already uses.
+
+**Verification:** `PYTHONPATH=src python -m pytest -q` → **249 passed**.

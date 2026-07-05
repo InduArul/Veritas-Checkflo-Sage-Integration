@@ -6,7 +6,7 @@ All windows are inclusive [start, end]; dates are `datetime.date`.
 from __future__ import annotations
 
 import calendar
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 DAILY = "daily"
 MONTHLY = "monthly"
@@ -75,3 +75,41 @@ def month_chunks(start: date, end: date) -> list[tuple[date, date]]:
         chunks.append((cur, chunk_end))
         cur = add_days(chunk_end, 1)
     return chunks
+
+
+def month_chunks_dt(start_dt: datetime, end_dt: datetime) -> list[tuple[datetime, datetime]]:
+    """Contiguous calendar-month sub-intervals tiling the half-open range ``(start_dt, end_dt]``
+    on a *datetime* axis (specs/13 §13.16 — the delta-upsert ``WHENMODIFIED`` axis).
+
+    Boundaries are shared (each next lower == previous upper) and sit at calendar-month starts
+    (``00:00:00``), so the delta builder's strict ``> lower`` / ``<= upper`` filter partitions the
+    range **exactly** — no gap, no double-count. The first chunk begins at ``start_dt`` and the last
+    ends at ``end_dt`` (both preserved exactly). Returns ``[]`` when ``start_dt >= end_dt`` (an empty
+    or inverted range has nothing to process under the strict ``> start`` filter).
+    """
+    if start_dt >= end_dt:
+        return []
+    chunks: list[tuple[datetime, datetime]] = []
+    cur = start_dt
+    while cur < end_dt:
+        nxt = (datetime(cur.year + 1, 1, 1) if cur.month == 12
+               else datetime(cur.year, cur.month + 1, 1))
+        upper = min(nxt, end_dt)
+        chunks.append((cur, upper))
+        cur = upper
+    return chunks
+
+
+def group_chunks(chunks, n: int):
+    """Merge every ``n`` consecutive ``(start, end)`` chunks into one wider chunk (``run.chunk_months``).
+
+    ``n <= 1`` returns the chunks unchanged (one calendar month each — the tightest memory bound,
+    specs/13 §13.16). Larger ``n`` trades a looser peak-memory bound for fewer Sage round-trips.
+    Each merged chunk keeps the first sub-chunk's start and the last sub-chunk's end, so the union
+    range — and therefore the rows processed — is identical regardless of ``n``.
+    """
+    chunks = list(chunks)
+    if n <= 1 or not chunks:
+        return chunks
+    return [(chunks[i][0], chunks[min(i + n, len(chunks)) - 1][1])
+            for i in range(0, len(chunks), n)]

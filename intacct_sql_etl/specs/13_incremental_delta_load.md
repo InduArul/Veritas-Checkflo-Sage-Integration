@@ -169,7 +169,9 @@ During shadow: for a given `(env, window)`, a **delta run followed by a delete-s
 - new **delete-sweep** step (key diff → scoped delete; identifiers config-driven + validated, `MERGE`/`DELETE` bound-param dates).
 - `cli`: `--mode`, keep `--run-type`/`--start`/`--end` for seed/backfill.
 - `audit`/notifier: inserted/updated/deleted counts (`specs/12`, OQ-15).
-- TDD: failing tests first for watermark advance/no-advance, delta filter, sweep key-diff, fall-through, parity-vs-full-refresh.
+- `dates`: add `month_chunks_dt(start_dt, end_dt)` (datetime month-tiling for the upsert axis); `orchestrator._process_environment_delta` loops month-chunks for **both** upsert and sweep so peak memory ≤ one chunk (§13.16, NFR-MEM-1); `run.chunk_months` config.
+- `deploy/run-etl.sh`: hardened rootless run-wrapper (flock + cgroup `MemoryMax` + `timeout`) — operational memory guard (§13.16).
+- TDD: failing tests first for watermark advance/no-advance, delta filter, sweep key-diff, fall-through, parity-vs-full-refresh, **and chunk tiling + per-chunk interleaving (memory-safety)**.
 
 ---
 
@@ -181,3 +183,21 @@ During shadow: for a given `(env, window)`, a **delta run followed by a delete-s
 - **OQ-19 [user] Seed depth. — RESOLVED 2026-07-02:** prod already has data from 2024-01-01 (no prod seed); seed the **`test_`** tables from **2024-01-01 → now** to mirror live for parity.
 - **OQ-20 [DBA] GL/AP hard-deletes. — RESOLVED 2026-07-02 (client):** hard delete only in OPEN periods; CLOSED periods are reversal-only (reversals = new rows caught by upsert). ⇒ sweep only needs to cover open period(s); accumulate of old data is provably safe. See §13.5 period rule.
 - **OQ-21 [user] `grace` interval. — RESOLVED 2026-07-02: 1 hour.**
+
+---
+
+## 13.16 Bounded-memory chunked processing (memory-safety NFR)
+
+**Incident (root cause, 2026-07-02 EOD):** a wide-window `sweep-upsert` on the shared VM (`VTSAzPLW01`, 15 GB RAM, **swap = 0**, co-resident with the stampli Docker stack) drove the box to thrash and starved `sshd` ("VM overload"). Root cause: the delta path pulls its **entire** window in one pass — `sage_client._fetch()` accumulates every page into a single in-memory `list` (`records.extend(page)`) before anything is loaded. A wide run (nightly/monthly sweep ≈ **600k+ GL keys**, or a far-behind / seed upsert) materialises the whole set at once. With no swap on a shared host, the spike is fatal to the whole VM, not just the job.
+
+**Requirement (NFR-MEM-1): peak in-memory record set ≤ one chunk, independent of total window span.** Both delta operations MUST process their window in **calendar-month sub-chunks** — extract → apply → **release** per chunk — exactly as the full-refresh path already does (`orchestrator._process_environment` loops `dates.month_chunks`; specs/05 §5.5). No delta code path may hold more than one chunk's records live.
+
+**Two chunk axes (they differ — do not merge into one loop):**
+- **Upsert** chunks on the **`WHENMODIFIED` datetime range** `(since, cutoff]` (§13.4/§13.6). Sub-intervals share boundaries at calendar-month starts; with the builder's strict `> lower` / `<= upper` filter the partition is exact (no gap, no double-count). Per chunk: `fetch_gl_delta`/`fetch_ap_delta` for the sub-interval → MERGE upsert (`commit=False`) → drop the reference.
+- **Delete-sweep** chunks on the **date window** `[start, end]` (Entry_Date / `apbill_sweep_date_field`), via `dates.month_chunks`. Per month: `fetch_gl_keys`/`fetch_ap_keys` for that month → `sweep_gl`/`sweep_ap` **windowed to that same month** → drop the reference. Sub-windows partition the window, so per-chunk "delete-missing" is identical to whole-window "delete-missing" (parity preserved, §13.12).
+
+**Watermark under chunking (preserves the §13.11 completeness gate):** the upsert advances the watermark to **`cutoff`** for an object **only if every chunk for that object fetched cleanly**. Any chunk error on an object holds that object's watermark back (and the single per-env transaction still rolls back on a hard failure). Sweep chunks keep the existing per-chunk mass-delete guard (`sweep_max_delete_fraction`) and the empty-key-pull skip.
+
+**Config:** `run.chunk_months` (default **1**) sets the sub-chunk size for both axes; `1` = one calendar month. It only bounds memory/paging — it does **not** change which rows are processed (chunked result == single-window result, asserted by test).
+
+**Defense-in-depth (operational, not a substitute for chunking):** `deploy/run-etl.sh` wraps every scheduled/manual run in a `flock` overlap guard + a rootless cgroup `MemoryMax` (systemd-run `--user`, default 3 GB, `MemorySwapMax=0`, `ulimit -v` fallback) + a wall-clock `timeout`. A run that still tries to over-allocate is OOM-killed **in its own cgroup** (rc 137) — the VM, stampli, and sshd are unaffected — and the wrapper logs a `MEMORY CAP HIT` line for the notifier. Chunking makes the cap never fire in normal operation; the cap makes a future regression survivable.

@@ -174,8 +174,8 @@ def _ap_key_set(records):
 
 def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start, end, cutoff,
                                grace, page_size, require_test, strategy, settle_s, sleep,
-                               max_delete_fraction, opts, connect, sage_client_factory, run_log,
-                               clock, now):
+                               max_delete_fraction, chunk_months, opts, connect,
+                               sage_client_factory, run_log, clock, now):
     """Delta run for one environment (specs/13): watermark-driven upsert and/or delete-sweep,
     inside a single transaction. Watermark advances per object only on a clean fetch (§13.11).
     Never raises — failures isolated like the full-refresh path."""
@@ -202,85 +202,103 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
         session_id = client.login()
 
         if do_upsert:
+            # Chunk the WHENMODIFIED range (since, cutoff] into calendar-month sub-intervals and
+            # process extract -> load -> release per chunk, so peak memory <= one chunk regardless
+            # of how far behind the watermark is (specs/13 §13.16, NFR-MEM-1). GL and AP may have
+            # different watermarks, so each gets its own chunk list.
             wm_gl = wmmod.get_watermark(conn, wm_table, name, "GL")
             since_gl = (wm_gl - grace) if wm_gl else floor
-            te = clock()
-            gl, gl_err = client.fetch_gl_delta(session_id, since_gl, cutoff,
-                                               page_size=page_size, **gl_delta_opts)
-            extract_s += clock() - te
-            if gl_err:
-                entry["gl_errors"].append(gl_err)
-                entry["gl_error"] = entry["gl_error"] or gl_err
-                log.warning("%s: GL delta error: %s", name, gl_err)
-            entry["gl_records"] += len(gl)
-            entry["gl_loaded"] += loader.load_gl_records(gl, page_size=page_size, commit=False)
+            for cs, ce in dates.group_chunks(dates.month_chunks_dt(since_gl, cutoff), chunk_months):
+                te = clock()
+                gl, gl_err = client.fetch_gl_delta(session_id, cs, ce,
+                                                   page_size=page_size, **gl_delta_opts)
+                extract_s += clock() - te
+                if gl_err:
+                    entry["gl_errors"].append(gl_err)
+                    entry["gl_error"] = entry["gl_error"] or gl_err
+                    log.warning("%s: GL delta error in chunk %s..%s: %s", name, cs, ce, gl_err)
+                entry["gl_records"] += len(gl)
+                entry["gl_loaded"] += loader.load_gl_records(gl, page_size=page_size, commit=False)
+                del gl                                              # release the chunk (§13.16)
 
             wm_ap = wmmod.get_watermark(conn, wm_table, name, "AP")
             since_ap = (wm_ap - grace) if wm_ap else floor
-            te = clock()
-            ap, ap_err = client.fetch_ap_delta(session_id, since_ap, cutoff,
-                                               page_size=page_size, **ap_delta_opts)
-            extract_s += clock() - te
-            if ap_err:
-                entry["ap_errors"].append(ap_err)
-                entry["ap_error"] = entry["ap_error"] or ap_err
-                log.warning("%s: AP delta error: %s", name, ap_err)
-            entry["ap_records"] += len(ap)
-            entry["ap_loaded"] += loader.load_ap_records(ap, page_size=page_size, commit=False)
+            for cs, ce in dates.group_chunks(dates.month_chunks_dt(since_ap, cutoff), chunk_months):
+                te = clock()
+                ap, ap_err = client.fetch_ap_delta(session_id, cs, ce,
+                                                   page_size=page_size, **ap_delta_opts)
+                extract_s += clock() - te
+                if ap_err:
+                    entry["ap_errors"].append(ap_err)
+                    entry["ap_error"] = entry["ap_error"] or ap_err
+                    log.warning("%s: AP delta error in chunk %s..%s: %s", name, cs, ce, ap_err)
+                entry["ap_records"] += len(ap)
+                entry["ap_loaded"] += loader.load_ap_records(ap, page_size=page_size, commit=False)
+                del ap                                              # release the chunk (§13.16)
 
             # Post-load reconcile (sync AP links -> GL, update vendor), same as the full-refresh path
-            # (CR: was missing from delta -> broke parity, specs/13 §13.12).
+            # (CR: was missing from delta -> broke parity, specs/13 §13.12). Once per window.
             if settle_s:
                 sleep(settle_s)
             loader.run_reconcile(start, end, commit=False)
 
-            # Completeness gate (§13.11): advance the watermark ONLY for a cleanly-fetched object.
-            if not gl_err:
+            # Completeness gate (§13.11): advance the watermark ONLY for an object whose EVERY chunk
+            # fetched cleanly (any chunk error leaves entry[..._error] set and holds it back).
+            if not entry["gl_error"]:
                 wmmod.set_watermark(conn, wm_table, name, "GL", cutoff, commit=False, now=now())
-            if not ap_err:
+            if not entry["ap_error"]:
                 wmmod.set_watermark(conn, wm_table, name, "AP", cutoff, commit=False, now=now())
 
         if do_sweep:
-            te = clock()
-            gl_keys, gk_err = client.fetch_gl_keys(session_id, start, end,
-                                                   page_size=page_size, **gl_keys_opts)
-            extract_s += clock() - te
-            if gk_err:
-                entry["gl_errors"].append(gk_err)
-                entry["gl_error"] = entry["gl_error"] or gk_err
-                log.warning("%s: GL keys error — skipping GL sweep (never delete on partial): %s",
-                            name, gk_err)
-            elif not gl_keys:
-                # CR mass-delete guard: an empty (but error-free) key pull would mark every in-scope
-                # row 'missing'. Skip rather than nuke the window (a benign filter/window mismatch).
-                log.warning("%s: GL key pull returned 0 rows — skipping GL sweep (mass-delete guard)",
-                            name)
-            else:
-                loader.sweep_gl(_gl_key_set(gl_keys), start, end, commit=False,
-                                max_delete_fraction=max_delete_fraction)
-
-            # AP sweep is windowed on a real date column (respects accumulate, specs/13 §13.9). If no
-            # such column is configured, AP sweep is SKIPPED — never a destructive full-table compare
-            # (which would delete historical bills Intacct no longer returns).
+            # Chunk the date window [start, end] into calendar-month sub-windows and sweep each in
+            # turn (pull keys -> delete-missing -> release), so the ~600k-key nightly/monthly sweep
+            # never materialises the whole window's key set at once (specs/13 §13.16, NFR-MEM-1).
+            # Sub-windows partition [start, end], so per-chunk delete-missing == whole-window
+            # delete-missing (parity, §13.12). AP sweep is windowed on a real date column (respects
+            # accumulate, §13.9); with no such column configured it is SKIPPED — never a destructive
+            # full-table compare that would delete historical bills Intacct no longer returns.
             ap_date_field = sql_cfg.get("apbill_sweep_date_field")
             if not ap_date_field:
                 log.info("%s: AP sweep skipped — no apbill_sweep_date_field configured "
                          "(APBillTable needs a date column to sweep safely)", name)
-            else:
+            for cs, ce in dates.group_chunks(dates.month_chunks(start, end), chunk_months):
                 te = clock()
-                ap_keys, ak_err = client.fetch_ap_keys(session_id, start, end,
+                gl_keys, gk_err = client.fetch_gl_keys(session_id, cs, ce,
+                                                       page_size=page_size, **gl_keys_opts)
+                extract_s += clock() - te
+                if gk_err:
+                    entry["gl_errors"].append(gk_err)
+                    entry["gl_error"] = entry["gl_error"] or gk_err
+                    log.warning("%s: GL keys error in chunk %s..%s — skipping its sweep "
+                                "(never delete on partial): %s", name, cs, ce, gk_err)
+                elif not gl_keys:
+                    # Mass-delete guard: an empty (but error-free) key pull would mark every in-scope
+                    # row 'missing'. Skip rather than nuke the sub-window.
+                    log.warning("%s: GL key pull empty for chunk %s..%s — skipping its sweep "
+                                "(mass-delete guard)", name, cs, ce)
+                else:
+                    loader.sweep_gl(_gl_key_set(gl_keys), cs, ce, commit=False,
+                                    max_delete_fraction=max_delete_fraction)
+                del gl_keys                                         # release the chunk (§13.16)
+
+                if not ap_date_field:
+                    continue
+                te = clock()
+                ap_keys, ak_err = client.fetch_ap_keys(session_id, cs, ce,
                                                        page_size=page_size, **ap_keys_opts)
                 extract_s += clock() - te
                 if ak_err:
                     entry["ap_errors"].append(ak_err)
                     entry["ap_error"] = entry["ap_error"] or ak_err
-                    log.warning("%s: AP keys error — skipping AP sweep: %s", name, ak_err)
+                    log.warning("%s: AP keys error in chunk %s..%s — skipping its sweep: %s",
+                                name, cs, ce, ak_err)
                 elif not ap_keys:
-                    log.warning("%s: AP key pull returned 0 rows — skipping AP sweep (mass-delete guard)",
-                                name)
+                    log.warning("%s: AP key pull empty for chunk %s..%s — skipping its sweep "
+                                "(mass-delete guard)", name, cs, ce)
                 else:
-                    loader.sweep_ap(_ap_key_set(ap_keys), start, end, date_field=ap_date_field,
+                    loader.sweep_ap(_ap_key_set(ap_keys), cs, ce, date_field=ap_date_field,
                                     commit=False, max_delete_fraction=max_delete_fraction)
+                del ap_keys                                         # release the chunk (§13.16)
 
         conn.commit()
         log.info("%s: delta complete (gl=%d ap=%d gl_del=%d ap_del=%d)", name,
@@ -474,6 +492,7 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
     grace = timedelta(hours=cfg.get("sage", {}).get("watermark_grace_hours", 1))
     delta_opts = _delta_query_opts(cfg)
     max_delete_fraction = cfg.get("sql", {}).get("sweep_max_delete_fraction", 0.5)
+    chunk_months = run_cfg.get("chunk_months", 1)              # specs/13 §13.16 bounded-memory chunking
 
     started = now()
     t_run = clock()
@@ -497,8 +516,8 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
                 cfg=cfg, secrets=secrets, start=start, end=end, cutoff=cutoff, grace=grace,
                 page_size=page_size, require_test=require_test, strategy=strategy,
                 settle_s=settle_s, sleep=sleep, max_delete_fraction=max_delete_fraction,
-                opts=delta_opts, connect=connect, sage_client_factory=sage_client_factory,
-                run_log=run_log, clock=clock, now=now,
+                chunk_months=chunk_months, opts=delta_opts, connect=connect,
+                sage_client_factory=sage_client_factory, run_log=run_log, clock=clock, now=now,
             )
         else:
             entry, env_audit = _process_environment(
