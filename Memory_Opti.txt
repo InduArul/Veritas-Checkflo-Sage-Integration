@@ -895,3 +895,13 @@ Resumed after the 2026-07-02 EOD stop ("SSH went flaky/refusing under VM load").
    When_Posted on older test_APBillTable rows so AP sweeps validate clean; then broader shadow
    + schedule cron via run-etl.sh (flock+cap) + reconcile vs Make -> cutover after sign-off.
 ================================================================================
+
+   --- 2026-07-05 CLEAN MULTI-CHUNK RUN (resolves the pending item) ---
+   VPN reconnected. Rewound GL+AP watermark to 2026-06-30 12:00 (-> 2 chunks) and ran
+   `--mode upsert` under the 3G cap + time -v: **rc=0, ok=True**, delta complete
+   gl=52,820 ap=2,301 (55,121 rows MERGEd, gl_del=0 ap_del=0), Elapsed 6:12,
+   **peak RSS = ~100 MB** (102,852 KB). Watermark advanced to cutoff (~07-05 14:05).
+   => TWO live proofs, both bounded ~100-118MB regardless of volume: 640k-key sweep (118MB)
+   + 55k-row upsert (100MB, clean rc=0). Chunking fix VALIDATED end-to-end. Follow-up (b)
+   (populate When_Posted on older test_APBillTable rows for clean AP sweeps) still open, non-gating.
+================================================================================
