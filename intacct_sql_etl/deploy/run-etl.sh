@@ -40,6 +40,19 @@ if ! flock -n 9; then
     exit 0
 fi
 
+# ---- load secrets/config env so the CLI's env-based secret provider resolves creds -------------
+# The ETL reads Sage + SQL secrets from the process environment (EnvSecretProvider). Cron/manual
+# invocations must load the .env first (systemd EnvironmentFile does this for unit-based runs).
+ENV_FILE="${ETL_ENV_FILE:-$APP/intacct-etl.env}"
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    # tolerate CRLF-contaminated .env lines (strip trailing CR) without mutating the file
+    . <(sed 's/\r$//' "$ENV_FILE")
+    set +a
+else
+    echo "$(now) WARN: env file $ENV_FILE not found — SQL/Sage secrets may be missing" | tee -a "$log"
+fi
+
 # ---- pick the memory-cap mechanism (probe the user systemd bus once, up front) -----------------
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 if systemd-run --user --scope --quiet --collect /bin/true >/dev/null 2>&1; then
