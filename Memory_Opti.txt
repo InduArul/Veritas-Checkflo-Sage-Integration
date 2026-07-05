@@ -875,3 +875,23 @@ Resumed after the 2026-07-02 EOD stop ("SSH went flaky/refusing under VM load").
    (~one month of keys, well under 3G) and flat vs a 1-month run -> then broader shadow +
    schedule cron via run-etl.sh (flock+cap) + reconcile vs Make -> cutover after sign-off.
 ================================================================================
+
+   --- 2026-07-05 LIVE VALIDATION RESULT (addendum) ---
+   MEMORY BOUND PROVEN LIVE: 3-month CHUNKED sweep (May-Jul, 3 chunks) under the 3G cap
+   -> **peak RSS = ~118 MB** (Maximum resident set size 120,868 KB), out of 15GB / 3G cap.
+   The exact ~640k-key path that overloaded the box on 07-02 now peaks at 118MB chunked.
+   The run then ABORTED (rc=1, rolled back, 0 deleted) on the AP mass-delete guard:
+   "AP sweep would delete 27/29 rows (>50% guard)" — EXPECTED: test_APBillTable When_Posted
+   is sparse (only ~839 recent rows populated; B5/OQ-26), so the May AP window shows 27/29
+   "missing". Guard = defense-in-depth working (CR-M2), NOT a chunking bug; no data touched.
+   In prod (When_Posted fully populated) it won't trip.
+   WRAPPER FIX (committed b586309): run-etl.sh now sources intacct-etl.env (CRLF-tolerant)
+   before the capped run — it previously didn't, so a cron run would fail pre-flight with
+   "SQL_PASSWORD not found" (the pre-flight caught it cleanly, rc2). SQL_PASSWORD now resolves.
+   COMMITS: de8eda8 (chunking + wrapper), b586309 (wrapper .env fix). Branch
+   intacct-etl-code-review-gate. NOT pushed. Tests 249 green; CODE_REVIEW pass 3 = 0 open.
+   STILL PENDING (non-gating, VPN was flaky 07-05): (a) a clean rc=0 multi-chunk LIVE run
+   (do an --mode upsert with a modest watermark rewind when VPN is stable); (b) DBA populate
+   When_Posted on older test_APBillTable rows so AP sweeps validate clean; then broader shadow
+   + schedule cron via run-etl.sh (flock+cap) + reconcile vs Make -> cutover after sign-off.
+================================================================================
