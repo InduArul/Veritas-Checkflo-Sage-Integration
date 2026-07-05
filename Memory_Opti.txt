@@ -905,3 +905,90 @@ Resumed after the 2026-07-02 EOD stop ("SSH went flaky/refusing under VM load").
    + 55k-row upsert (100MB, clean rc=0). Chunking fix VALIDATED end-to-end. Follow-up (b)
    (populate When_Posted on older test_APBillTable rows for clean AP sweeps) still open, non-gating.
 ================================================================================
+
+--------------------------------------------------------------------------------
+2026-07-05 (cont.)  —  BENCHMARK vs MAKE + PROD PARITY + PATH-TO-PROD TEST PLAN
+--------------------------------------------------------------------------------
+A) MAKE DAILY-RUN BENCHMARK (last run 2026-07-05 08:00, window Apr1-Jul31, from
+   Make executions API; mainflow 1743529, daily worker 1744137):
+   - 5 worker chunks: 469.8s, 185.8s, 661.8s, 23.9s, 17.2s -> SUM = 1,358.5s = 22m39s.
+   - + mainflow (slicer/scheduler) 163.5s -> total compute 1,522s = 25m22s.
+   - Workers run ASYNC/overlapping (fired 30s apart) -> Make WALL-CLOCK ~12m15s.
+   - Make used 5 slices for a 4-mo window (4 real months + tiny overflow); heaviest
+     chunk ~11m/365MB (June).
+
+B) OUR PYTHON FULL-REFRESH (fresh, wiped both test_ tables to 0 first; --mode full
+   Apr1-Jul31; bench harness scratch/bench_fullrefresh.py; under 3G cap; rc=0):
+   Per-chunk (GL ext / GL load / AP ext / AP load):
+     Apr GL 202,667 (352.3s/14.6s)  AP 8,625 (6.9s/2.8s)   wall 376.7s
+     May GL 189,714 (316.5s/12.1s)  AP 7,736 (7.0s/0.5s)   wall 336.2s
+     Jun GL 135,721 (212.2s/8.6s)   AP 5,713 (4.8s/0.4s)   wall 226.0s
+     Jul GL   6,128 (5.8s/0.3s)     AP   159 (1.7s/0.0s)   wall   7.8s
+   TOTAL GL 534,230 (ext 886.8s/load 35.7s) AP 22,233 (ext 20.3s/load 3.7s) = 946.8s = 15m47s.
+   => Ours 15m47s SEQUENTIAL beats Make's 22m39s summed compute (~30% faster), 0 Make ops,
+      peak RAM ~100-120MB. BOTTLENECK = Sage extract (886.8s = 93.7%); SQL load trivial (~40s).
+      Reconcile procs EXCLUDED (GL/AP only, per user). This is worst-case (full seed); prod
+      delta is seconds-to-minutes.
+
+C) PROD PARITY (read-only vs LIVE dbo.GLTable / dbo.APBillTable; test tables now hold the
+   fresh Apr-Jul full-refresh):
+   - *** GL = 100% MATCH by natural key (Record_No+Line_No) ***: all 534,230 test rows in
+     prod; value mismatches 0/0/0/0 (Base_Amount/Account_No/Entry_Date/Journal); test-only 0;
+     prod-extra lines on shared bills 0. Despite the ~6h cutoff gap (Make 08:00 vs our 14:00)
+     ZERO GL drift. Extraction is faithful.
+   - AP = our 22,233 are a 100%-correct SUBSET of prod's 25,443 (test-only 0). Prod has 3,210
+     MORE (1,143 from vendors we also see in-window). Our AP window = When_Posted 04/01-07/31,
+     0 NULLs. EXPLANATION: our AP extract is DATE-WINDOWED (Apr-Jul); Make's APBillTable is a
+     broader FULL reload -> 3,210 = bills outside our window. Scope difference, NOT an error.
+     ACTION: pin Make's exact AP worker query filter + align AP scope (ties to When_Posted B5).
+   - FILTER-BASIS NOTE: naive count (prod Entry_Date Apr-Jul = 665,745 vs our 534,230) is NOT
+     a mismatch -> Make EXTRACTS GL on BATCH_DATE but the table only stores Entry_Date, so
+     "Entry_Date in window" on prod is a different set than the BATCH_DATE window both tools pull.
+     Compare by KEY, never by re-filtering a stored date. GL columns: Base_Amount/Account_No/
+     Journal stored as VARCHAR (use TRY_CAST for numeric compare).
+
+D) *** DECISION 2026-07-05: TEST ALL ITEMS BELOW BEFORE GO-LIVE. Resuming tomorrow. ***
+   PATH-TO-PROD TEST PLAN (nothing is live; cutover only after all pass + sign-off):
+   BUCKET 1 - CORRECTNESS GATES (must pass):
+   [ ] 1. CLEAN DELETE-SWEEP - never once validated (every live sweep aborted on mass-delete
+          guard due to sparse When_Posted). The ONLY path that DELETES data. BLOCKED on DBA
+          populating When_Posted on ALL AP rows (B5/OQ-26).
+   [ ] 2. DELTA == FULL-REFRESH parity LIVE (specs/13 §13.12) - core delta trust gate; only
+          proven offline (model test). Must hold live across several cycles.
+   [ ] 3. AP SCOPE alignment - pin Make's AP query filter; match it (or ratify windowed).
+   [ ] 4. FULL-COLUMN checksum (all 19 GL cols, not just 4) + reconcile vs SAGE authoritative
+          count (not only vs Make) so neither system dropped rows.
+   [ ] 5. MONTHLY run (Jan-last-year..now, ~26 chunks) - never run live; prove completes +
+          bounded memory + correct.
+   [ ] 6. GL date-basis (BATCH_DATE extract / Entry_Date sweep) matches Make; WHENMODIFIED
+          company-tz cutoff boundary/DST (OQ-16b) no skip/dup.
+   [ ] 7. MULTI-ENTITY - validate every prod entity (Empres/Evergreen/Livewell/...) configured
+          + failure isolation live (only Evergreen exercised so far).
+   BUCKET 2 - OPERATIONAL READINESS (required for unattended prod):
+   [ ] 8. FAILURE ALERTING live (notifier built; Graph/SMTP transport + recipients NOT wired -
+          C5/D1/C6). No unattended prod without failure alerts. BLOCKED on IT (mailbox) + D1.
+   [ ] 9. SCHEDULING via run-etl.sh cron (08:00/17:30 upsert, 01:00 sweep-upsert, monthly wide);
+          prove unattended timers fire.
+   [ ] 10. FAILURE DRILLS - kill mid-chunk -> re-run converges (idempotent); force Sage timeout
+           -> correct degrade/alert/no-watermark-advance; overlap tick -> real skip.
+   [ ] 11. SECRET ROTATION runbook (SQL pwd quarterly by Diana) - KeyVault (C1-C6) or documented.
+   BUCKET 3 - SUSTAINED VALIDATION + SIGN-OFF:
+   [ ] 12. PARALLEL-RUN vs Make several cycles, reconcile each (WAVES W8 gate).
+   [ ] 13. CUTOVER runbook + rollback - VERIFY PROD procs target prod (07-02 isolation incident:
+           a proc-body mistake bypasses prod_write_guard); reversible first prod run; then disable
+           Make SQL-feed scenarios (keep for rollback).
+   BLOCKERS: DBA=When_Posted (unblocks 1,3,sweep). IT=KeyVault+mailbox+SharePoint (8,11).
+   You/Yosef=ratify AP scope (3), approve cutover (12-13).
+
+E) CURRENT STATE (for resume): test_GLTable=534,230 / test_APBillTable=22,233 (fresh Apr-Jul
+   full-refresh, wiped-then-reloaded 2026-07-05 ~14:00). Watermark GL/AP = 2026-07-05 06:59
+   (from the earlier upsert; NOT re-advanced by --mode full - inconsistent w/ table state, fine,
+   idempotent). run-etl.sh live on VM (flock+cap+timeout+.env). Deployed code = chunked delta
+   (dates.month_chunks_dt/group_chunks, orchestrator loops). Commits on branch
+   intacct-etl-code-review-gate: de8eda8, b586309, d3131f9, ffbca4a (+ this doc update). NOT pushed.
+   Bench harness: scratch/bench_fullrefresh.py (local + /tmp on VM).
+
+RESUME TOMORROW: work Bucket 1 no-blocker items first (4 full-column+Sage reconcile; 3 pin Make
+AP query; 6 date-basis from blueprints), stage cron (9, disabled), and chase DBA (When_Posted)
++ IT (mailbox/KeyVault) so 1/2/8 can proceed. Nothing goes live until all 13 pass + sign-off.
+================================================================================
