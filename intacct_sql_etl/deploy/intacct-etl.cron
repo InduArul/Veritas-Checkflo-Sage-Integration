@@ -1,0 +1,26 @@
+# Intacct SQL ETL — PARALLEL-RUN schedule (gate #12), offset +40 min from Make.
+# ============================================================================
+# Make runs 08:00 & 17:30 EASTERN (confirmed via API: scheduling.time 08:00,
+# nextExec 12:00Z = 08:00 America/New_York). To avoid hitting Intacct at the SAME
+# time as Make (session/rate errors), we run +40 min AFTER each Make run.
+# Times are EASTERN (CRON_TZ) to match Make's schedule.
+#
+# This writes ONLY test_ tables — fully parallel to Make, zero prod impact. Enable it
+# to START the parallel-run soak (#12); a daily reconcile (reconcile-vs-make.sh) compares
+# test_ vs prod each morning and logs drift.
+#
+# To ENABLE:  sudo loginctl enable-linger <etl-user>   # so run-etl.sh's cgroup cap works under cron
+#             sudo cp intacct-etl.cron /etc/cron.d/intacct-etl && sudo chmod 644 /etc/cron.d/intacct-etl
+# To DISABLE: sudo rm /etc/cron.d/intacct-etl
+# ============================================================================
+CRON_TZ=America/New_York
+# m  h  dom mon dow  user           command
+# --- intraday UPSERT, +40 min after Make's 08:00 and 17:30 ET ---
+ 40  8   *   *   *   <etl-user>  /data/intacct-etl/run-etl.sh --config /data/intacct-etl/config.yaml --mode upsert
+ 10 18   *   *   *   <etl-user>  /data/intacct-etl/run-etl.sh --config /data/intacct-etl/config.yaml --mode upsert
+# --- nightly SWEEP + UPSERT (delete-detection), days 2-31, 01:00 ET (no Make overlap) ---
+  0  1  2-31 *   *   <etl-user>  /data/intacct-etl/run-etl.sh --config /data/intacct-etl/config.yaml --mode sweep-upsert
+# --- monthly WIDE on the 1st, +40 after Make's 08:00 monthly ---
+ 40  8   1   *   *   <etl-user>  /data/intacct-etl/run-etl.sh --config /data/intacct-etl/config.yaml --run-type monthly --mode sweep-upsert
+# --- daily RECONCILE vs Make (test_ vs prod key+checksum drift report), 09:30 ET ---
+ 30  9   *   *   *   <etl-user>  /data/intacct-etl/reconcile-vs-make.sh
