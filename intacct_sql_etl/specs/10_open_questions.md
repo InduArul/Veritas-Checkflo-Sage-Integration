@@ -140,6 +140,22 @@ Resolve these before coding the affected area. Owner in brackets.
 - **OQ-30 [user/DBA] Pre-flight strictness** (`specs/14`). On SQL auth failure: abort whole run + alert
   (default, fail-fast) vs continue and fail per-env.
 
+- **OQ-31 [user/DBA] Multi-entity keying = `Source_Env`. — DIRECTION APPROVED 2026-07-06 (user).**
+  `GLTable`/`APBillTable` are shared across all Sage companies with no company discriminator, and AP
+  `Record_No` (Sage per-company PK) **collides across companies** (Evergreen vs Veritashs) → MERGE-by-
+  `Record_No` silently overwrites (2,341 in the Apr–Jul test) and every delete/sweep is entity-blind
+  (one env's run would wipe another's rows). **Decision:** add a **`Source_Env`** column; AP PK =
+  **`(Source_Env, Record_No)`**; GL keeps `(Record_No, Line_No)` + `Source_Env` for scoping; all
+  wipe/sweep gain `AND Source_Env = ?`; `SyncAPLinksToGL` join adds `Source_Env` (its `Record_ID` join
+  is non-unique). Design: `docs/design/multi_entity_source_env_design.md`. Verified `RECORDNO` is unique
+  *within* each company (Evergreen 20,834 / Veritashs 2,204, 0 dups); `Record_ID` is NOT (rejected).
+  **Accepted divergence from Make:** AP row count ~27,784 vs prod's collision-collapsed 25,443.
+  **Open sub-questions (for cutover — build starts in `test_` only):** (a) DBA owns the same column +
+  merge-key + join change on **prod** procs/tables + change window; (b) which downstream consumers read
+  these tables and can they handle the new column + AP count increase; (c) enumerate **all** Sage
+  companies Make loads (only Evergreen + Veritashs enabled now); (d) prod `Source_Env` back-fill vs
+  forward-only from cutover.
+
 - **OQ-22 [user/IT] Secret store = Azure Key Vault + VM Managed Identity** (`specs/14`). **DECISION 2026-07-02:
   do NOT block the build on the vault.** Build behind a swappable `SecretProvider` interface; default impl =
   env/`.env` (chmod 600, as today); **repoint to Key Vault later** with no code change. When IT is ready:

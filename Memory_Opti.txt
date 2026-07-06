@@ -1128,3 +1128,22 @@ STATE CHANGE: test tables now MULTI-ENTITY: test_GLTable=665,761  test_APBillTab
   still stands for that scope. Harness: scratch/additive_load_entity.py. config.yaml on VM now
   has BOTH envs enabled.
 ================================================================================
+
+--- 2026-07-06 DECISION LOCKED: multi-entity key + entity-scoped deletes ---
+Verified RECORDNO is UNIQUE within each company (Evergreen 20,834/20,834 distinct, Veritashs
+2,204/2,204 distinct, 0 dups; + Sage structural guarantee — RECORDNO is the APBILL object PK,
+per-company sequence). Record_ID (document no.) is NOT safe (dupes, e.g. "Placker Charles REFUND").
+DECISION (user-approved):
+  1. Add Source_Env column to test_GLTable + test_APBillTable, stamped at load from the env name.
+  2. AP PRIMARY KEY = (Source_Env, Record_No). Both entities COEXIST (~27,784 rows, no overwrite,
+     deterministic). DIVERGES from prod (25,443 collision-collapsed); downstream consumers of
+     APBillTable must handle the entity dimension. (Chosen over Make-parity to fix the latent
+     cross-company Record_No collision.)
+  3. Every delete/wipe/sweep gains AND Source_Env=? so one env's run cannot delete another's rows.
+     (Location_ID rejected as discriminator: NULLs + one company spans many locations.)
+BUILD SCOPE (not started; needs spec-first + TDD per CLAUDE.md): specs update (schema/key/delete
+model); test_ table DDL (add Source_Env, change AP PK); test_ bulk procs must write Source_Env
+(AddAPBillBulk/AddGLDetailBulk — touches the 'procs are black boxes' rule, discuss); loader stamps
+Source_Env + entity-scoped wipe_window/sweep_gl/sweep_ap; reconcile join note — SyncAPLinksToGL
+joins GL.Bill_No=AP.Record_ID (Record_ID NOT unique) => multi-entity link join needs review.
+--- end decision ---
