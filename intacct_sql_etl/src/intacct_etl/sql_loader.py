@@ -47,10 +47,12 @@ class LoaderMetrics:
 
 
 class SqlLoader:
-    def __init__(self, connection, sql_cfg: dict, *, require_test_targets: bool = True,
+    def __init__(self, connection, sql_cfg: dict, *, source_env: str | None = None,
+                 require_test_targets: bool = True,
                  clock: Callable[[], float] = time.monotonic):
         self.conn = connection
         self.cfg = sql_cfg
+        self.source_env = source_env      # multi-entity tag (specs/04 FR-LOAD-7, OQ-31)
         self.clock = clock
         self.metrics = LoaderMetrics()
         if require_test_targets:
@@ -61,13 +63,19 @@ class SqlLoader:
         """Fetch a configured table/proc/field name and validate it as a safe identifier."""
         return safe_identifier(str(self.cfg[key]))
 
+    def _source_env_col(self) -> str:
+        """Validated name of the entity discriminator column (default Source_Env)."""
+        return safe_identifier(str(self.cfg.get("source_env_column", "Source_Env")))
+
     def _exec_proc_json(self, proc_name: str, json_str: str) -> int:
-        """Execute the bulk proc with the page bound as a parameter. Returns rows affected
-        (cursor.rowcount; <0 means the proc reported none) for the audit trail."""
+        """Execute the bulk proc with the page + @Source_Env bound as parameters. Returns rows
+        affected (cursor.rowcount; <0 means the proc reported none) for the audit trail.
+
+        The page is single-env, so @Source_Env stamps the whole batch (specs/04 FR-LOAD-7)."""
         proc = safe_identifier(proc_name)
         with closing(self.conn.cursor()) as cur:
-            # Bound parameter — JSON is NOT interpolated into the SQL text (no quote escaping).
-            cur.execute(f"EXEC {proc} ?", (json_str,))
+            # Bound parameters — JSON is NOT interpolated into the SQL text (no quote escaping).
+            cur.execute(f"EXEC {proc} ?, ?", (json_str, self.source_env))
             return max(0, getattr(cur, "rowcount", 0) or 0)
 
     def _load_records(self, proc_key: str, records: list[dict], page_size: int,
@@ -100,26 +108,29 @@ class SqlLoader:
     def wipe_window(self, start, end, *, commit: bool = True) -> None:
         """Delete the refresh window before reload (specs/04 FR-LOAD-1).
 
-        GL: windowed on the configured delete date field. AP: full reload by default
-        (`apbill_full_reload`), else windowed on `apbill_delete_date_field`. Table/field
-        names come entirely from config (validated); values are bound parameters.
+        GL: windowed on the configured delete date field. AP: "full reload" by default
+        (`apbill_full_reload`), else windowed on `apbill_delete_date_field`. Every delete is
+        scoped by `Source_Env` (specs/04 FR-LOAD-7) so one env's refresh never touches another's
+        rows — "full reload" now means "all of THIS env's AP rows", not the whole table. Table/
+        field names come entirely from config (validated); values are bound parameters.
         """
         gl_table = self._ident("gl_table")
         gl_field = safe_identifier(self.cfg.get("gl_delete_date_field", "Entry_Date"))
+        se = self._source_env_col()
         t0 = self.clock()
         with closing(self.conn.cursor()) as cur:
             cur.execute(
-                f"DELETE FROM {gl_table} WHERE {gl_field} >= ? AND {gl_field} <= ?",
-                (start, end),
+                f"DELETE FROM {gl_table} WHERE {gl_field} >= ? AND {gl_field} <= ? AND {se} = ?",
+                (start, end, self.source_env),
             )
             ap_table = self._ident("apbill_table")
             if self.cfg.get("apbill_full_reload", True):
-                cur.execute(f"DELETE FROM {ap_table}")
+                cur.execute(f"DELETE FROM {ap_table} WHERE {se} = ?", (self.source_env,))
             else:
                 ap_field = safe_identifier(self.cfg.get("apbill_delete_date_field", "WHENPOSTED"))
                 cur.execute(
-                    f"DELETE FROM {ap_table} WHERE {ap_field} >= ? AND {ap_field} <= ?",
-                    (start, end),
+                    f"DELETE FROM {ap_table} WHERE {ap_field} >= ? AND {ap_field} <= ? AND {se} = ?",
+                    (start, end, self.source_env),
                 )
         self.metrics.wipe_s += self.clock() - t0
         if commit:
@@ -152,16 +163,19 @@ class SqlLoader:
         gl = self._ident("gl_table")
         field = safe_identifier(self.cfg.get("gl_delete_date_field", "Entry_Date"))
         cols = [safe_identifier(c) for c in self.cfg.get("gl_key_columns", ["Record_No", "Line_No"])]
+        se = self._source_env_col()
         collist = ", ".join(cols)
         where = " AND ".join(f"{c} = ?" for c in cols)
         t0 = self.clock()
         with closing(self.conn.cursor()) as cur:
-            cur.execute(f"SELECT {collist} FROM {gl} WHERE {field} >= ? AND {field} <= ?", (start, end))
+            # Entity-scoped: only THIS env's rows are read/compared/deleted (specs/04 FR-LOAD-7).
+            cur.execute(f"SELECT {collist} FROM {gl} WHERE {field} >= ? AND {field} <= ? AND {se} = ?",
+                        (start, end, self.source_env))
             rows = cur.fetchall()
             missing = [tuple(r) for r in rows if tuple(str(x) for x in r) not in present_keys]
             self._guard_mass_delete("GL", len(missing), len(rows), max_delete_fraction)
             for key in missing:
-                cur.execute(f"DELETE FROM {gl} WHERE {where}", tuple(key))
+                cur.execute(f"DELETE FROM {gl} WHERE {where} AND {se} = ?", tuple(key) + (self.source_env,))
         self.metrics.gl_deleted += len(missing)
         self.metrics.sweep_s += self.clock() - t0
         if commit:
@@ -179,14 +193,17 @@ class SqlLoader:
         ap = self._ident("apbill_table")
         col = safe_identifier(self.cfg.get("ap_key_column", "Record_No"))
         dfield = safe_identifier(date_field)
+        se = self._source_env_col()
         t0 = self.clock()
         with closing(self.conn.cursor()) as cur:
-            cur.execute(f"SELECT {col} FROM {ap} WHERE {dfield} >= ? AND {dfield} <= ?", (start, end))
+            # Entity-scoped: only THIS env's rows are read/compared/deleted (specs/04 FR-LOAD-7).
+            cur.execute(f"SELECT {col} FROM {ap} WHERE {dfield} >= ? AND {dfield} <= ? AND {se} = ?",
+                        (start, end, self.source_env))
             rows = cur.fetchall()
             missing = [tuple(r) for r in rows if tuple(str(x) for x in r) not in present_keys]
             self._guard_mass_delete("AP", len(missing), len(rows), max_delete_fraction)
             for key in missing:
-                cur.execute(f"DELETE FROM {ap} WHERE {col} = ?", tuple(key))
+                cur.execute(f"DELETE FROM {ap} WHERE {col} = ? AND {se} = ?", tuple(key) + (self.source_env,))
         self.metrics.ap_deleted += len(missing)
         self.metrics.sweep_s += self.clock() - t0
         if commit:

@@ -197,7 +197,8 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
         wm_table = sql_cfg["watermark_table"]
         creds = cfgmod.resolve_env_creds(cfg, env, secrets)
         conn = connect(sql_cfg, secrets)
-        loader = SqlLoader(conn, sql_cfg, require_test_targets=require_test, clock=clock)
+        loader = SqlLoader(conn, sql_cfg, source_env=name,
+                           require_test_targets=require_test, clock=clock)
         client = sage_client_factory(creds)
         session_id = client.login()
 
@@ -361,7 +362,8 @@ def _process_environment(env, *, cfg, secrets, start, end, chunks, granularity, 
             )
         creds = cfgmod.resolve_env_creds(cfg, env, secrets)
         conn = connect(cfg["sql"], secrets)
-        loader = SqlLoader(conn, cfg["sql"], require_test_targets=require_test, clock=clock)
+        loader = SqlLoader(conn, cfg["sql"], source_env=env["name"],
+                           require_test_targets=require_test, clock=clock)
         client = sage_client_factory(creds)
 
         loader.wipe_window(start, end, commit=False)

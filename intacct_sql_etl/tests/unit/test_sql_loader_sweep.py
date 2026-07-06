@@ -56,10 +56,11 @@ CFG = {
     "proc_update_vendor": "test_UpdateVendorInfoInGL",
 }
 S, E = date(2026, 3, 1), date(2026, 6, 30)
+ENV = "Evergreen"
 
 
 def _loader(rows):
-    return sql_loader.SqlLoader(FakeConnection(rows), CFG)
+    return sql_loader.SqlLoader(FakeConnection(rows), CFG, source_env=ENV)
 
 
 def test_sweep_gl_deletes_only_absent_keys():
@@ -69,9 +70,9 @@ def test_sweep_gl_deletes_only_absent_keys():
     n = ld.sweep_gl(present, S, E)
     assert n == 1
     reads = [c for c in ld.conn.cur.calls if "SELECT" in c[0].upper()]
-    assert "Entry_Date" in reads[0][0] and reads[0][1] == (S, E)
+    assert "Entry_Date" in reads[0][0] and "Source_Env" in reads[0][0] and reads[0][1] == (S, E, ENV)
     dels = [c for c in ld.conn.cur.calls if "DELETE" in c[0].upper()]
-    assert len(dels) == 1 and dels[0][1] == ("101", "1")
+    assert len(dels) == 1 and dels[0][1] == ("101", "1", ENV) and "Source_Env" in dels[0][0]
     assert ld.conn.commits == 1
     assert ld.metrics.gl_deleted == 1
 
@@ -89,9 +90,9 @@ def test_sweep_ap_windowed_on_date_field():
     n = ld.sweep_ap({("200",)}, S, E, date_field="When_Posted")   # 201 no longer in Intacct
     assert n == 1
     read = [c for c in ld.conn.cur.calls if "SELECT" in c[0].upper()][0]
-    assert "When_Posted" in read[0] and read[1] == (S, E)      # windowed, bound params
+    assert "When_Posted" in read[0] and read[1] == (S, E, ENV)   # windowed + entity-scoped
     dels = [c for c in ld.conn.cur.calls if "DELETE" in c[0].upper()]
-    assert dels[0][1] == ("201",)
+    assert dels[0][1] == ("201", ENV)
     assert ld.metrics.ap_deleted == 1
 
 
@@ -112,7 +113,7 @@ def test_sweep_gl_allows_delete_within_threshold():
 
 def test_sweep_uses_configured_identifiers():
     cfg = dict(CFG, gl_table="test_MyGL", gl_key_columns=["RecNo", "Ln"])
-    ld = sql_loader.SqlLoader(FakeConnection([("1", "1")]), cfg)
+    ld = sql_loader.SqlLoader(FakeConnection([("1", "1")]), cfg, source_env=ENV)
     ld.sweep_gl({("1", "1")}, S, E)
     assert any("test_MyGL" in c[0] and "RecNo" in c[0] for c in ld.conn.cur.calls)
 
@@ -132,7 +133,7 @@ class _DatedCursor:
         self.conn.calls.append((sql, params))
         flat = sql.upper().replace(" ", "")
         if flat.startswith("SELECT"):
-            start, end = params
+            start, end = params[0], params[1]      # params now = (start, end, source_env)
             if "TEST_GLTABLE" in flat:
                 self._result = [k for (k, dt) in self.conn.gl if start <= dt <= end]
             else:
@@ -178,7 +179,7 @@ def test_gl_sweep_2027_never_touches_out_of_window_history():
         (("2026A", "1"), date(2026, 5, 1)),               # in window, still in Intacct
         (("2027GONE", "1"), date(2027, 2, 1)),            # in window, deleted in Intacct
     ])
-    ld = sql_loader.SqlLoader(conn, CFG)
+    ld = sql_loader.SqlLoader(conn, CFG, source_env=ENV)
     n = ld.sweep_gl({("2026A", "1")}, W_START, W_END)     # Intacct in-window set
     survivors = {k for (k, _) in conn.gl}
     assert ("2024A", "1") in survivors                    # 2024 history untouched
@@ -193,7 +194,7 @@ def test_ap_sweep_2027_never_touches_out_of_window_history():
         (("2026B",), date(2026, 4, 1)),                   # in window, still in Intacct
         (("2027GONE",), date(2027, 3, 1)),                # in window, deleted in Intacct
     ])
-    ld = sql_loader.SqlLoader(conn, CFG)
+    ld = sql_loader.SqlLoader(conn, CFG, source_env=ENV)
     n = ld.sweep_ap({("2026B",)}, W_START, W_END, date_field="When_Posted")
     survivors = {k for (k, _) in conn.ap}
     assert ("2024B",) in survivors                        # 2024 history untouched

@@ -76,9 +76,9 @@ def test_load_gl_uses_configured_proc_and_bound_param():
     loader.load_gl_records(_records(2), page_size=10)
     sql, params = conn.cur.calls[0]
     assert "test_AddGLDetailBulk" in sql
-    assert "?" in sql                       # parameter placeholder, not interpolation
-    assert isinstance(params, (list, tuple)) and len(params) == 1
-    # the bound param is the JSON page (so quotes are NOT escaped into the SQL text)
+    assert "?, ?" in sql                    # bound params: json page + @Source_Env
+    assert isinstance(params, (list, tuple)) and len(params) == 2
+    # the first bound param is the JSON page (so quotes are NOT escaped into the SQL text)
     assert json.loads(params[0]) == _records(2)
     assert "GLDETAIL" not in sql            # data isn't baked into the SQL string
 

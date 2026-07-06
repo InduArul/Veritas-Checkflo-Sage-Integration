@@ -217,7 +217,7 @@ def test_sweep_mode_deletes_absent_keys_only():
                          ap_keys=[{"RECORDNO": "200", "_date": jun}])
     _run(base_cfg("sweep"), client, conn)
     dels = _gl_deletes(conn)
-    assert len(dels) == 1 and dels[0][1] == ("999", "9")
+    assert len(dels) == 1 and dels[0][1] == ("999", "9", "Evergreen")   # entity-scoped delete
     assert not [c for c in conn.calls if "test_AddGLDetailBulk" in c[0]]       # no upsert
     assert not _wm_updates(conn)                                              # watermark not advanced
     assert conn.commits == 1
@@ -272,7 +272,7 @@ def test_ap_sweep_windowed_when_date_field_configured():
     _run(cfg, client, conn)
     assert client.seen["ap_keys_start"] == date(2026, 4, 1)             # first chunk = run window start
     dels = [c for c in conn.calls if "DELETE FROM test_APBillTable" in c[0]]
-    assert dels and dels[0][1] == ("201",)
+    assert dels and dels[0][1] == ("201", "Evergreen")   # entity-scoped delete
 
 
 def test_sweep_skipped_when_key_pull_is_empty():
@@ -395,7 +395,7 @@ def test_chunked_sweep_parity_deletes_exactly_the_missing_union():
     cfg = base_cfg("sweep", run={"window_override": {"start": "04/01/2026", "end": "06/30/2026"}})
     res = _run(cfg, client, conn)
     deleted = {c[1] for c in _gl_deletes(conn)}
-    assert deleted == {("A2", "1"), ("M2", "1"), ("J2", "1")}
+    assert deleted == {("A2", "1", "Evergreen"), ("M2", "1", "Evergreen"), ("J2", "1", "Evergreen")}
     assert res.audit.environments[0].gl_deleted == 3
 
 

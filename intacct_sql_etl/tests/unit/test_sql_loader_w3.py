@@ -43,10 +43,11 @@ CFG = {
     "proc_update_vendor": "test_UpdateVendorInfoInGL",
 }
 S, E = date(2025, 1, 1), date(2025, 1, 31)
+ENV = "Evergreen"
 
 
 def _loader(cfg=CFG):
-    return sql_loader.SqlLoader(FakeConnection(), cfg)
+    return sql_loader.SqlLoader(FakeConnection(), cfg, source_env=ENV)
 
 
 def test_wipe_window_gl_windowed_ap_full():
@@ -57,9 +58,10 @@ def test_wipe_window_gl_windowed_ap_full():
     ap = next(c for c in calls if "test_APBillTable" in c[0])
     assert "DELETE FROM test_GLTable" in gl[0]
     assert "Entry_Date" in gl[0] and "?" in gl[0]      # configured field, bound params
-    assert gl[1] == (S, E)
+    assert "Source_Env" in gl[0] and gl[1] == (S, E, ENV)
     assert "DELETE FROM test_APBillTable" in ap[0]
-    assert "WHERE" not in ap[0].upper()                # full reload -> no filter
+    # AP "full reload" is now scoped to THIS env (not a whole-table wipe): WHERE Source_Env = ?
+    assert "Source_Env" in ap[0] and ap[1] == (ENV,)
     assert ld.conn.commits == 1
 
 
@@ -69,7 +71,7 @@ def test_wipe_window_ap_windowed_when_not_full_reload():
     ld.wipe_window(S, E)
     ap = next(c for c in ld.conn.cur.calls if "test_APBillTable" in c[0])
     assert "WHENPOSTED" in ap[0] and "?" in ap[0]
-    assert ap[1] == (S, E)
+    assert "Source_Env" in ap[0] and ap[1] == (S, E, ENV)
 
 
 def test_run_reconcile_calls_both_procs_in_order_with_dates():
