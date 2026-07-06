@@ -1043,3 +1043,44 @@ STATE CHANGE: test_GLTable now HAS reconcile procs applied (links+vendor populat
   Harness committed to scratch/gl_fullcol_parity.py. VPN/VM up & healthy this session
   (one 120s Sage read-timeout on the June probe, auto-retried OK).
 ================================================================================
+
+================================================================================
+2026-07-06 — #3 AP-SCOPE DIAGNOSED: the "3,210 extra prod AP bills" = MULTI-ENTITY,
+              NOT a date-window problem. AP windowing IS aligned. Reassign to #7.
+================================================================================
+User pushed back on "ratify with Yosef" — correctly, this is data lineage, not a
+business call. Traced the 3,210 empirically. Chain of evidence:
+
+1. AP-GL join key = GL.Bill_No = AP.Record_ID (111,188 GL rows link via Record_ID;
+   Record_No is the internal numeric key, only 780 coincidental matches).
+2. Our AP EXTRACT filters Sage APBILL on WHENPOSTED in [Apr1..Jul31] (config ap.date_field
+   =WHENPOSTED). test_APBillTable = 22,233, all in-window (NULL=0/before=0/after=0).
+3. Make's AP worker (reference/worker_*_.json) ALSO filters APBILL on WHENPOSTED between
+   {{2.Report_start_date}} and {{2.Today_date}} — SAME basis, not an unfiltered full reload.
+   Mainflow formulas: Report_start_date = addMonths(now,-3); Today_date = end-of-current-month.
+   On a 2026-07-06 run that's Apr6..Jul31 ≈ our test window. Mainflow module 136
+   (mssql:DeleteFromTable, where:[]) full-wipes APBillTable each run, then reloads.
+4. GL Entry_Date of the 3,210 is mostly IN-window (1321 Apr/1049 May/780 Jun/44 Jul; only
+   178 have any pre-Apr activity) — so a naive "old bills" theory FAILS.
+5. Sage AP-keys intersect: of the 3,210, only 13 appear in Sage under ANY WHENPOSTED window
+   2015..2026-03 (queried AS EVERGREEN). 3,197 are returned by Sage under NO window.
+6. RESOLUTION via Location_ID (=MEGAENTITYID): the 3,210 prod-only bills are the 100-series
+   (100–112) + PHS/BHP/RHC/NMP/IHG. test_APBillTable (Evergreen) has ZERO of 100–112; it is
+   200-series + 040–090 + 130–184 + EVG + None. Config has ONLY Evergreen enabled. Prod
+   GLTable=5,102,780 (ALL entities) vs test 534,230 (Evergreen); GL 100-series prod=1,347,527
+   test=0. => The 3,210 are ANOTHER ENTITY's AP bills; our run extracted one entity only.
+
+CONCLUSION: They are NOT outside our date window and NOT an extraction/windowing defect.
+Both tools filter AP identically on WHENPOSTED over the same window. The ONLY reason prod
+has more is multi-entity coverage. => Item #3 (AP scope / window alignment) is RESOLVED for a
+given entity: aligned. The 3,210 delta belongs to Item #7 (multi-entity — validate every prod
+entity incl. the 100-series env, currently commented out in config; only Evergreen exercised).
+
+CUTOVER IMPLICATIONS surfaced (for #7 / #13): prod GLTable & APBillTable are SHARED across all
+entities. (a) AP module 136 does where:[] FULL wipe of APBillTable — must confirm whether that
+wipe is entity-scoped or global; a global wipe+reload per-entity run would clobber sibling
+entities. (b) GL delete basis must be entity-scoped too. (c) Cutover must run ALL entities, and
+the load/delete must isolate per-entity so one env can't delete another's rows (ties to the
+07-02 isolation incident + prod_write_guard). Recommend: add the 100-series env to config,
+run parallel per-entity, reconcile each (this is exactly #7 + #12).
+================================================================================
