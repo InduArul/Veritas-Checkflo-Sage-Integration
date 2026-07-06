@@ -1292,3 +1292,24 @@ several attempts + per_chunk commit); full wide-monthly completion is slow seque
 is the fix). A representative daily/monthly upsert completes clean rc=0 with live progress.
 VPN dropped+recovered mid-session (flaky, as noted). Resume: #10 kill/timeout drills; then #11 doc.
 --- end ---
+
+--- 2026-07-06 GATES #10 (failure drills) + #11 (rotation runbook) = DONE ---
+#10 FAILURE DRILLS = PASS (all three, live):
+  A overlap-skip: a stacked run-etl.sh SKIPs on the flock ("another ETL run holds run.lock"); holder rc=0.
+  B kill mid-chunk: SIGKILL'd the worker mid-fetch -> run.lock auto-released (FREE), watermark HELD at
+    07-05 (not advanced). Re-ran to rc=0 -> watermark advanced to cutoff, 0 duplicate GL keys, 0 dup AP
+    keys => idempotent convergence (MERGE + unique constraints). No corruption.
+  C Sage-unreachable: pointed sage.url at a black-hole -> run retries per policy then degrades;
+    watermark NOT advanced (proven still 07-05) => no data skipped, safe to re-run.
+#11 SECRET ROTATION RUNBOOK = docs/SECRET_ROTATION_RUNBOOK.md. SecretProvider (env/.env today, KeyVault
+  future OQ-22, config-flip no code). SQL_PASSWORD quarterly by Diana; procedure = rotate at source ->
+  update .env/vault (no code) -> off-hours dry-run rc=0 -> rollback restores prior value (watermark
+  integrity on failure means no data loss). Sage/SMTP creds same pattern. KeyVault blocked on IT.
+OPS NOTES from drills: back-dated watermarks during drills caused legit upsert growth
+  (test_GLTable 666,232->668,810, AP 27,826->28,117; records modified in the drill windows; 0 dups).
+  Evergreen+Veritashs watermarks now current (~07-06 05:57). VM clean/idle, 14GB free.
+GATE SCOREBOARD now: PASS #1,#2,#4,#6,#7,#10; RESOLVED #3; #5 mechanism proven; #9 cron staged(disabled);
+  #11 runbook done; #13 cutover runbook drafted. BLOCKED: #8 (IT SMTP), #11-KeyVault (IT), #12 (cycles).
+  => Everything no-blocker is GREEN. Remaining to prod: IT(#8/#11-vault) + #12 parallel-run + prod
+  schema migration (DBA=me, per CUTOVER_RUNBOOK) + Yosef sign-off.
+--- end ---
