@@ -1222,3 +1222,12 @@ Final health: load 0, 14GB free, idle. test_GLTable=666,204 test_APBillTable=27,
   parallel monthly = PLANNED enhancement (post-cutover, cap 4-6 for swapless-OOM safety, conn-per-
   worker, deadlock retry, config knob). Not a go-live blocker.
 --- end ---
+
+--- 2026-07-06 GATE #2 = PASS (delta == full-refresh parity, live) ---
+Contained test on Evergreen July GL slice (~6,316 rows): full-refresh (wipe+insert) checksum ==
+delta (upsert R + sweep) checksum after perturbing (del 5 / corrupt 5 / +2 orphans). Delta upsert
+fixed corrupted + re-added deleted; sweep removed the 2 orphans; converged to identical 19-col
+checksum. Proves specs/13 §13.12 live. Harness: scratch/parity_delta_vs_fullrefresh.py. July slice
+left in current live state (test_GLTable 666,204->666,232 = +28 live July rows since reload; AP
+27,826 unchanged; 0 leftover orphans). Health nominal.
+--- end ---
