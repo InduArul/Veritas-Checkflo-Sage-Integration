@@ -161,6 +161,8 @@ def _delta_query_opts(cfg: dict):
     ap_keys = dict(common)
     if df:
         ap_keys["date_format"] = df
+    if "show_private" in ap:                 # sweep key pull MUST match the load's scope (gate #1)
+        ap_keys["show_private"] = ap["show_private"]
     return gl_delta, ap_delta, gl_keys, ap_keys
 
 

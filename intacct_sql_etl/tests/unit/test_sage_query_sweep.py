@@ -49,6 +49,26 @@ def test_ap_keys_query_selects_recordno_only_windows_whenposted():
     assert "WHENPOSTED" in _filter(xml)
 
 
+def test_ap_keys_query_includes_showprivate_matching_the_load():
+    # GATE #1 BUG (2026-07-06): the sweep key pull MUST send showprivate=true like the AP LOAD,
+    # else it returns only non-private bills (fewer) and the sweep marks loaded sub-entity bills
+    # as "missing" -> mass-delete / guard abort. Keys query must match the load's scope.
+    common = dict(session_id="SID", start=date(2026, 4, 1), end=date(2026, 7, 31),
+                  offset=0, page_size=2000, return_json=True)
+    load = sage_query.build_ap_query_xml(**common)
+    keys = sage_query.build_ap_keys_query_xml(**common)
+    assert "<showprivate>true</showprivate>" in load          # load baseline (default True)
+    assert "<showprivate>true</showprivate>" in keys          # sweep must match (RED before fix)
+
+
+def test_ap_keys_query_showprivate_can_be_disabled():
+    keys = sage_query.build_ap_keys_query_xml(
+        session_id="SID", start=date(2026, 4, 1), end=date(2026, 7, 31),
+        offset=0, page_size=2000, return_json=True, show_private=False,
+    )
+    assert "<showprivate>" not in keys
+
+
 def test_gl_keys_pagesize_offset_and_returnformat():
     xml = sage_query.build_gl_keys_query_xml(
         session_id="SID", start=date(2026, 3, 1), end=date(2026, 6, 30),

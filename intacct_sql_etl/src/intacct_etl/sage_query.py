@@ -258,20 +258,27 @@ def build_ap_keys_query_xml(
     fields=None,
     order_by=None,
     date_field: str = "WHENPOSTED",
+    show_private: bool = True,
     return_json: bool,
     creds: dict | None = None,
     date_format: str = DEFAULT_DATE_FORMAT,
     dtd_version: str = DEFAULT_DTD_VERSION,
 ) -> str:
-    """AP keys-only query for the delete-sweep: RECORDNO, WHENPOSTED window."""
+    """AP keys-only query for the delete-sweep: RECORDNO, WHENPOSTED window.
+
+    MUST mirror the AP LOAD query's `showprivate` (default True) — otherwise the key pull returns
+    only non-private bills and the sweep marks loaded sub-entity bills as missing (gate #1, OQ-26).
+    """
     fields = fields or AP_KEY_FIELDS
     order_by = order_by or AP_DEFAULT_ORDER
     creds = creds or _BLANK_CREDS
     filter_xml = "<and>" + _date_window_filter(date_field, start, end, date_format) + "</and>"
+    options_extra = "<showprivate>true</showprivate>" if show_private else ""
     return _query_xml(
         creds, session_id=session_id, obj="APBILL", fields=fields,
         filter_xml=filter_xml, order_by=order_by, offset=offset,
-        page_size=page_size, return_json=return_json, dtd_version=dtd_version,
+        page_size=page_size, options_extra=options_extra, return_json=return_json,
+        dtd_version=dtd_version,
     )
 
 
