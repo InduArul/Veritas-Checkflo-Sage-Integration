@@ -1313,3 +1313,24 @@ GATE SCOREBOARD now: PASS #1,#2,#4,#6,#7,#10; RESOLVED #3; #5 mechanism proven; 
   => Everything no-blocker is GREEN. Remaining to prod: IT(#8/#11-vault) + #12 parallel-run + prod
   schema migration (DBA=me, per CUTOVER_RUNBOOK) + Yosef sign-off.
 --- end ---
+
+--- 2026-07-06 GATE #12 PARALLEL-RUN: STARTED (soak clock running) ---
+Clean baseline reset done: test_GLTable=666,586 (EVG 534,835 + VTS 131,751), test_APBillTable=27,826
+(EVG 22,265 + VTS 5,561), Apr-Jul 2026, both entities. Cleared drill pollution. reset_baseline.py had
+a bug (seeded watermark to end-of-window 07-31 = future); FIXED to 07-06; the manual tick then advanced
+it to 07-06 06:54 (rc=0, clean). Watermarks now current for both envs GL+AP.
+CRON ENABLED (user crontab, vtsazplw01-admin, loginctl enable-linger ON): +40min after Make, EASTERN
+(CRON_TZ=America/New_York): 08:40 & 18:10 upsert, 01:00 sweep-upsert (days 2-31), 08:40 monthly (1st),
+09:30 reconcile-vs-make.sh. 5 jobs. Make runs 08:00/17:30 ET (confirmed via API scheduling.time+nextExec).
+Deployed: /data/intacct-etl/{run-etl.sh, reconcile-vs-make.sh, reconcile_vs_make.py}. Committed e9363d1.
+FIRST RECONCILE (day-0 baseline, exit 2 "drift" = EXPECTED): GL test=666,586 test_only=10
+value_mismatch_19col=99 (known Stampli residual ~14 + LIVE TIMING DRIFT: our fresh pull vs Make's last
+08:00/17:30 snapshot). AP test 27,826 vs prod collapsed 25,480 (known Source_Env-vs-collision diff).
+=> The SOAK signal is the TREND across days, not day-0 absolutes. reconcile threshold may need tuning
+(currently KNOWN_GL_RESIDUAL=14 -> always flags timing drift; treat daily report as human-reviewed).
+TZ FINDING (OQ-8): Make SCHEDULE = Eastern, but app data-tz config = America/Los_Angeles (Pacific,
+"OQ-8 confirm"). Schedule-tz != data-tz is legal but CONFIRM the Sage COMPANY timezone — a 3h error in
+the WHENMODIFIED cutoff would skew deltas (#6). ACTION: verify Sage company tz.
+RESUME: review daily reconcile trend (09:30 ET); tune reconcile threshold after a few days; confirm
+Sage company tz (OQ-8); chase IT (#8 SMTP, #11 KeyVault); then prod schema migration + Yosef sign-off.
+--- end ---
