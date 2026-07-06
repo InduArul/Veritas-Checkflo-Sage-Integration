@@ -220,6 +220,7 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
             wm_gl = wmmod.get_watermark(conn, wm_table, name, "GL")
             since_gl = (wm_gl - grace) if wm_gl else floor
             for cs, ce in dates.group_chunks(dates.month_chunks_dt(since_gl, cutoff), chunk_months):
+                _progress(run_log, f"{name} GL upsert {cs:%Y-%m-%d}..{ce:%Y-%m-%d}: fetching…")
                 te = clock()
                 gl, gl_err = client.fetch_gl_delta(session_id, cs, ce,
                                                    page_size=page_size, **gl_delta_opts)
@@ -238,6 +239,7 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
             wm_ap = wmmod.get_watermark(conn, wm_table, name, "AP")
             since_ap = (wm_ap - grace) if wm_ap else floor
             for cs, ce in dates.group_chunks(dates.month_chunks_dt(since_ap, cutoff), chunk_months):
+                _progress(run_log, f"{name} AP upsert {cs:%Y-%m-%d}..{ce:%Y-%m-%d}: fetching…")
                 te = clock()
                 ap, ap_err = client.fetch_ap_delta(session_id, cs, ce,
                                                    page_size=page_size, **ap_delta_opts)
@@ -280,6 +282,7 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
                          "(APBillTable needs a date column to sweep safely)", name)
             for cs, ce in dates.group_chunks(dates.month_chunks(start, end), chunk_months):
                 gd0, ad0 = loader.metrics.gl_deleted, loader.metrics.ap_deleted
+                _progress(run_log, f"{name} sweep {cs:%Y-%m-%d}..{ce:%Y-%m-%d}: pulling keys…")
                 te = clock()
                 gl_keys, gk_err = client.fetch_gl_keys(session_id, cs, ce,
                                                        page_size=page_size, **gl_keys_opts)
