@@ -1147,3 +1147,33 @@ model); test_ table DDL (add Source_Env, change AP PK); test_ bulk procs must wr
 Source_Env + entity-scoped wipe_window/sweep_gl/sweep_ap; reconcile join note — SyncAPLinksToGL
 joins GL.Bill_No=AP.Record_ID (Record_ID NOT unique) => multi-entity link join needs review.
 --- end decision ---
+
+================================================================================
+2026-07-06 — MULTI-ENTITY Source_Env CHANGE: BUILT, MIGRATED, VERIFIED (test_ only)
+================================================================================
+Implemented the (Source_Env, Record_No) fix end-to-end in test_ (prod untouched; isolation
+re-verified: all 4 test_ procs reference only test_ tables). Spec-first + TDD per CLAUDE.md.
+- Specs: 04 FR-LOAD-7 + 13 §13.5 (Source_Env scoping). OQ-31 recorded.
+- Code: SqlLoader gains source_env; bulk procs called EXEC ?,? (@Source_Env); wipe_window/
+  sweep_gl/sweep_ap all scope AND Source_Env=?; orchestrator passes env["name"] (full+delta).
+  run_reconcile unchanged (fix is in the proc join). 254 tests green (5 new + updated existing).
+  Commits: c111c68 (specs+captured procs), 3f17aef (migration SQL+NEW procs), 695bbfd (code+tests).
+- DB migration (test_ only): cleared both tables; added Source_Env NVARCHAR(64) NOT NULL to both;
+  AP key swapped test_UQ_APBillTable_RecordNo -> test_UQ_APBillTable_SrcEnv_RecordNo (Source_Env,
+  Record_No); ALTER'd 4 procs (Add*Bulk +@Source_Env & MERGE on (Source_Env,Record_No) for AP;
+  Sync/UpdateVendor joins + AND G.Source_Env=A.Source_Env). Reference: reference/sql/*.NEW.sql +
+  migration_source_env.sql + *.CAPTURED.sql. VM installed pkg updated (site-packages).
+- Reloaded BOTH envs (additive, source_env-tagged, Apr-Jul). VERIFIED:
+  * test_APBillTable = 27,826 = Evergreen 22,265 + Veritashs 5,561 => NO collision collapse
+    (was 25,443 pre-fix; 2,346 shared Record_No now keep BOTH rows, e.g. RecNo 321543 = EVG bill
+    2420609032 loc209 + VTS bill 1912857 loc101). test_GLTable=666,204. NULL Source_Env=0.
+  * Structural isolation: Evergreen-scoped window read sees only 22,265 (Veritashs 5,561 invisible)
+    -> an Evergreen sweep/wipe can never touch Veritashs. Delete paths all Source_Env-scoped.
+  * Links stamped per env via Source_Env-scoped join (EVG 33,850 / VTS 8,970).
+VM health throughout: load ~0, ~14GB free of 16GB, swap 0, ETL RSS <=284MB (one month-chunk;
+bounded — 26-chunk monthly has SAME peak). STANDING RULE now: health-check every VM-heavy step.
+
+TABLE STATE NOW: multi-entity, Source_Env-keyed. test_GLTable=666,204 test_APBillTable=27,826.
+NEXT: OQ-32 commit_granularity (daily=per_env atomic, monthly=per_chunk resumable) — user-approved,
+build next. Then remaining path-to-prod gates. Prod cutover of Source_Env = separate (OQ-31 a-d, DBA).
+================================================================================

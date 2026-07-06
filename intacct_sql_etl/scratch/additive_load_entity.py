@@ -47,7 +47,7 @@ def main():
     client = sage_client.SageClient(transport, creds, retry=retry.from_config(cfg.get("retry", {})))
 
     conn = db.connect(sql, secrets)
-    loader = SqlLoader(conn, sql, require_test_targets=cfgmod.is_test_mode(cfg))
+    loader = SqlLoader(conn, sql, source_env=name, require_test_targets=cfgmod.is_test_mode(cfg))
     gl_t, ap_t = sql["gl_table"], sql["apbill_table"]
     cur = conn.cursor()
 
