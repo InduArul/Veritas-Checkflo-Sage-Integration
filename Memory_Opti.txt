@@ -1231,3 +1231,47 @@ checksum. Proves specs/13 §13.12 live. Harness: scratch/parity_delta_vs_fullref
 left in current live state (test_GLTable 666,204->666,232 = +28 live July rows since reload; AP
 27,826 unchanged; 0 leftover orphans). Health nominal.
 --- end ---
+
+================================================================================
+2026-07-06 END-OF-SESSION CONSOLIDATED STATUS (session 2)
+================================================================================
+GATE SCOREBOARD (path-to-prod, 13 gates):
+  #1 clean delete-sweep ...... PASS (test). Found+fixed AP-keys showprivate bug (d0c7b5f).
+  #2 delta==full-refresh ..... PASS (live, Evergreen July GL, checksum-identical) (49bfb11).
+  #3 AP scope ................ RESOLVED (was multi-entity, not a window issue).
+  #4 full 19-col checksum .... PASS (8bad162).
+  #5 monthly (~26 chunks) .... IN PROGRESS — representative 6-mo sweep-upsert running on VM
+                               (bounded mem ~114MB, sequential = slow; proves mechanism + OQ-33 need).
+  #6 GL date-basis + tz ...... PASS (decided keep two-date, OQ-2). Company tz America/Los_Angeles set.
+  #7 multi-entity ............ BUILT+VERIFIED in test_ (Source_Env). Prod cutover separate (OQ-31).
+  #8 failure alerting ........ BLOCKED (IT). DIAGNOSED: tenant SMTP AUTH off (535 5.7.139). Fix:
+                               per-mailbox Set-CASMailbox / tenant enable / Graph sendMail / Mimecast.
+                               SMTP creds in .env (SMTP_USERNAME/PASSWORD).
+  #9 cron (disabled) ......... TODO (no blocker) — now has progress-log + housekeeping wired.
+  #10 failure drills ......... TODO (no blocker).
+  #11 rotation runbook ....... TODO doc; KeyVault blocked (IT).
+  #12 parallel-run vs Make ... BLOCKED by TIME (several cycles/days). Earliest go-live gate.
+  #13 cutover runbook ........ DRAFT done: docs/CUTOVER_RUNBOOK.md (prod DDL/proc/backfill/rollback).
+                               NOTHING run on prod. Prod APBillTable has NO When_Posted col (must add).
+
+FEATURES SHIPPED TODAY (all test_ only; 261 tests green; VM healthy throughout):
+  - Multi-entity Source_Env: col on both test_ tables, AP key=(Source_Env,Record_No), all deletes
+    entity-scoped, 4 test_ procs updated, migration run. test_APBillTable=27,826 (EVG 22,265 + VTS
+    5,561, NO collision), test_GLTable~666,232. Both envs enabled in VM config.yaml.
+  - OQ-32 commit_granularity: daily=per_env atomic / monthly=per_chunk resumable.
+  - OQ-34 live per-chunk progress log (timestamped, tail-able, crash-surviving) + run-etl.sh 7-day
+    prune of logs/ + audit/*.json (OQ-23 done).
+BUGS FOUND+FIXED by exercising gates: (1) cross-company Record_No collision (2,341 overwrites) ->
+  Source_Env composite key. (2) AP sweep keys missing showprivate (7,290 vs 22,265) -> nightly sweep
+  would abort on guard every run -> fixed.
+DECISIONS: OQ-2 keep two-date GL (accept rare straddle). OQ-33 bounded 4x parallel monthly = planned
+  post-cutover (cap 4-6, conn-per-worker, deadlock retry; initial seed sequential). Monthly already
+  lean (upsert = WHENMODIFIED-since-watermark, not full re-pull; wide part = keys-only sweep).
+DEPLOY: VM venv site-packages updated (sql_loader/orchestrator/sage_query/logging_setup); run-etl.sh
+  updated+executable. All commits on branch intacct-etl-code-review-gate, NOT pushed:
+  b6f2fe4..426fbfa (see git log). Make LIVE + UNTOUCHED throughout (isolation re-verified post-edit).
+BLOCKERS TO CHASE: DBA work = ME now (acting DBA; prod When_Posted+Source_Env+procs+backfill per
+  runbook, needs window+approval). IT = SMTP AUTH enable (#8) + KeyVault (#11). Yosef = cutover sign-off.
+RESUME NEXT: report #5 rc; then #9 (stage cron disabled) + #10 (failure drills); then #11 rotation doc.
+  Production flip gated on IT(#8/#11) + #12 parallel-run cycles + sign-off + prod schema migration.
+================================================================================
