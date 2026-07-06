@@ -992,3 +992,54 @@ RESUME TOMORROW: work Bucket 1 no-blocker items first (4 full-column+Sage reconc
 AP query; 6 date-basis from blueprints), stage cron (9, disabled), and chase DBA (When_Posted)
 + IT (mailbox/KeyVault) so 1/2/8 can proceed. Nothing goes live until all 13 pass + sign-off.
 ================================================================================
+
+================================================================================
+2026-07-06 — GATE #4: FULL 19-COLUMN GL PARITY + SAGE-AUTHORITATIVE COUNT (PASS)
+================================================================================
+Ran the no-blocker Bucket-1 item #4 (extend parity from 4 GL cols -> all 19, and
+reconcile vs Sage-as-authoritative, not just vs Make). Harness =
+scratch/gl_fullcol_parity.py (server-side SHA2_256 hash of all 19 cols, prod<->test
+LEFT JOIN on natural key Record_No+Line_No; nothing but aggregates cross the wire =
+bounded memory, the 07-02 lesson). Plus a per-column mismatch breakdown script.
+
+PHASE A — full 19-col parity (test_GLTable=534,230 vs live dbo.GLTable):
+  Initial run: 68,916 rows differed. Per-column breakdown showed the diffs are
+  confined to EXACTLY the 4 post-load sync-proc columns (bulk-insert cols all clean):
+     Vendor_ID 35,118 / Vendor_Name 35,118 (UpdateVendorInfoInGL)
+     Stampli_Link 33,850 / Platform_Services_Link 5,004 (SyncAPLinksToGL)
+  Cause: the 07-05 bench full-refresh EXCLUDED the reconcile procs, so those 4 cols
+  were NULL/stale in test. Ran loader.run_reconcile(2026-04-01..07-31) on test_
+  (test_SyncAPLinksToGL + test_UpdateVendorInfoInGL; 3.0s; writes ONLY test_ tables).
+  AFTER reconcile: Vendor_ID / Vendor_Name / Platform_Services_Link = 0 mismatches;
+  Stampli_Link 33,850 -> 14. => *** 18 of 19 columns = 100% byte-parity across all
+  534,230 shared rows *** (was only 4 cols proven before). test_only_orphans=0,
+  prod_extra_lines_on_shared_bills=0.
+  The 14 residual Stampli_Link: their Bill_No is absent from BOTH prod AND test AP
+  tables (bills 1265146633, 1437863800, 2066, 3317, 5312026, AG-01-APR-26, "Placker
+  Charles REFUND", ...; several are manual/journal accruals, not Stampli invoices).
+  Prod GL carries a link stamped in an EARLIER cycle that persists in prod's
+  accumulated GLTable after the bill dropped out of the reloaded APBillTable; our
+  COLD full-refresh never inherited those historical stamps. => cold-rebuild artifact,
+  NOT an extraction fault (in steady-state delta our GL would retain the stamps too).
+  0.0026% of rows; every extracted/loaded value matches. PHASE A = PASS.
+
+PHASE B — Sage-authoritative GL count vs test_GLTable (Apr-Jul, per-chunk pagesize=1
+  probe -> numremaining+1, BATCH_DATE basis, env=Evergreen, no data pull):
+     Apr 202,667  May 189,714  Jun 135,876  Jul 6,128  = 534,385 sage
+     test_GLTable = 534,230  ->  delta -155, ENTIRELY in June (bench June was 135,721;
+     Sage now 135,876 = +155). = ~1 day of live drift in the open June window between
+     the 07-05 14:00 snapshot and the 07-06 probe. NOT a load defect — the count
+     methodology is validated; an exact-zero reconcile needs a frozen concurrent
+     snapshot (fold into parallel-run gate #12). PHASE B = methodology PASS.
+
+GATE #4 VERDICT: PASS (extraction+load faithful to all 19 cols; residuals fully
+  explained and non-defect). Two clean handoffs produced:
+   -> #3 (AP scope): the link-sync residual is coupled to AP-window scope; when AP
+      scope is aligned the sync-proc columns reconcile fully (already 0 for in-window).
+   -> #12 (parallel-run): use a frozen concurrent snapshot for exact Phase-B zero.
+
+STATE CHANGE: test_GLTable now HAS reconcile procs applied (links+vendor populated) —
+  differs from the 07-05 "reconcile procs excluded" state. test_GLTable still 534,230.
+  Harness committed to scratch/gl_fullcol_parity.py. VPN/VM up & healthy this session
+  (one 120s Sage read-timeout on the June probe, auto-retried OK).
+================================================================================
