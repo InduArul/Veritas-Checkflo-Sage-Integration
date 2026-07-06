@@ -1334,3 +1334,12 @@ the WHENMODIFIED cutoff would skew deltas (#6). ACTION: verify Sage company tz.
 RESUME: review daily reconcile trend (09:30 ET); tune reconcile threshold after a few days; confirm
 Sage company tz (OQ-8); chase IT (#8 SMTP, #11 KeyVault); then prod schema migration + Yosef sign-off.
 --- end ---
+
+--- 2026-07-06 EOD: IT contacted, pausing to review tomorrow ---
+USER has written to IT re: #8 (enable tenant/mailbox SMTP AUTH or Graph sendMail) + #11 (KeyVault).
+WAITING on IT. #12 parallel-run soak is LIVE and will run overnight unattended (18:10 ET evening upsert
+tonight, then 08:40 upsert + 09:30 reconcile tomorrow AM; 01:00 nightly sweep). test_ only, Make
+untouched. TOMORROW: review the reconcile drift report(s) + confirm the scheduled runs succeeded
+(rc=0), then continue (threshold tuning, OQ-8 tz confirm, IT reply, prod migration, sign-off).
+Nothing pushed; nothing on prod. Safe unattended (flock + mem cap + timeout guardrails; linger ON).
+--- end ---
