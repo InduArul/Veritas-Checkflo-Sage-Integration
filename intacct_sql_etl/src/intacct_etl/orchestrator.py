@@ -175,7 +175,7 @@ def _ap_key_set(records):
 def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start, end, cutoff,
                                grace, page_size, require_test, strategy, settle_s, sleep,
                                max_delete_fraction, chunk_months, opts, connect,
-                               sage_client_factory, run_log, clock, now):
+                               sage_client_factory, run_log, clock, now, commit_chunks=False):
     """Delta run for one environment (specs/13): watermark-driven upsert and/or delete-sweep,
     inside a single transaction. Watermark advances per object only on a clean fetch (§13.11).
     Never raises — failures isolated like the full-refresh path."""
@@ -219,7 +219,8 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
                     entry["gl_error"] = entry["gl_error"] or gl_err
                     log.warning("%s: GL delta error in chunk %s..%s: %s", name, cs, ce, gl_err)
                 entry["gl_records"] += len(gl)
-                entry["gl_loaded"] += loader.load_gl_records(gl, page_size=page_size, commit=False)
+                entry["gl_loaded"] += loader.load_gl_records(gl, page_size=page_size,
+                                                             commit=commit_chunks)
                 del gl                                              # release the chunk (§13.16)
 
             wm_ap = wmmod.get_watermark(conn, wm_table, name, "AP")
@@ -234,7 +235,8 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
                     entry["ap_error"] = entry["ap_error"] or ap_err
                     log.warning("%s: AP delta error in chunk %s..%s: %s", name, cs, ce, ap_err)
                 entry["ap_records"] += len(ap)
-                entry["ap_loaded"] += loader.load_ap_records(ap, page_size=page_size, commit=False)
+                entry["ap_loaded"] += loader.load_ap_records(ap, page_size=page_size,
+                                                             commit=commit_chunks)
                 del ap                                              # release the chunk (§13.16)
 
             # Post-load reconcile (sync AP links -> GL, update vendor), same as the full-refresh path
@@ -278,7 +280,7 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
                     log.warning("%s: GL key pull empty for chunk %s..%s — skipping its sweep "
                                 "(mass-delete guard)", name, cs, ce)
                 else:
-                    loader.sweep_gl(_gl_key_set(gl_keys), cs, ce, commit=False,
+                    loader.sweep_gl(_gl_key_set(gl_keys), cs, ce, commit=commit_chunks,
                                     max_delete_fraction=max_delete_fraction)
                 del gl_keys                                         # release the chunk (§13.16)
 
@@ -298,7 +300,7 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
                                 "(mass-delete guard)", name, cs, ce)
                 else:
                     loader.sweep_ap(_ap_key_set(ap_keys), cs, ce, date_field=ap_date_field,
-                                    commit=False, max_delete_fraction=max_delete_fraction)
+                                    commit=commit_chunks, max_delete_fraction=max_delete_fraction)
                 del ap_keys                                         # release the chunk (§13.16)
 
         conn.commit()
@@ -495,6 +497,11 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
     delta_opts = _delta_query_opts(cfg)
     max_delete_fraction = cfg.get("sql", {}).get("sweep_max_delete_fraction", 0.5)
     chunk_months = run_cfg.get("chunk_months", 1)              # specs/13 §13.16 bounded-memory chunking
+    # OQ-32 commit granularity: daily = per_env (one atomic commit), monthly = per_chunk (resumable,
+    # bounded t-log). Config `sql.commit_granularity` overrides the run_type-derived default.
+    commit_gran = cfg.get("sql", {}).get("commit_granularity") \
+        or ("per_chunk" if run_type == "monthly" else "per_env")
+    commit_chunks = commit_gran == "per_chunk"
 
     started = now()
     t_run = clock()
@@ -520,6 +527,7 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
                 settle_s=settle_s, sleep=sleep, max_delete_fraction=max_delete_fraction,
                 chunk_months=chunk_months, opts=delta_opts, connect=connect,
                 sage_client_factory=sage_client_factory, run_log=run_log, clock=clock, now=now,
+                commit_chunks=commit_chunks,
             )
         else:
             entry, env_audit = _process_environment(

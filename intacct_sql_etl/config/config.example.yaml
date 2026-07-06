@@ -85,6 +85,9 @@ sql:
   #                                       # the column + have test_AddAPBillBulk populate it (OQ-26).
   sweep_max_delete_fraction: 0.5      # abort a sweep that would delete > this fraction of scanned rows
   load_strategy: transaction          # transaction | staging_swap (OQ-5; staging not yet implemented)
+  # commit_granularity: per_env       # OQ-32: per_env (atomic, default for daily) | per_chunk (commit
+  #                                     each month-chunk — resumable, bounded t-log; default for monthly).
+  #                                     Omit to auto-derive from run_type (daily=per_env, monthly=per_chunk).
   proc_add_gl: AddGLDetailBulk
   proc_add_ap: AddAPBillBulk
   proc_sync_links: "[Intacct].[dbo].[SyncAPLinksToGL]"

@@ -140,6 +140,20 @@ Resolve these before coding the affected area. Owner in brackets.
 - **OQ-30 [user/DBA] Pre-flight strictness** (`specs/14`). On SQL auth failure: abort whole run + alert
   (default, fail-fast) vs continue and fail per-env.
 
+- **OQ-32 [user] Commit granularity for heavy loads. — APPROVED 2026-07-06 (user).** The delta engine
+  is already chunked by calendar month (bounded memory) and pages the SQL proc at 2000 rows, but it
+  **commits once per env** (whole run = one transaction). For the **monthly** wide run (~26 chunks)
+  that is a huge long-lived transaction (t-log growth, long locks, full rollback+redo on a late
+  failure). Decision: add `sql.commit_granularity` = **`per_env`** (default; atomic, crash-safe — used
+  for the small **daily** delta) or **`per_chunk`** (commit after each month-chunk load + each sweep
+  chunk — bounded t-log, **resumable**; used for the heavy **monthly** run). Default is derived from
+  run_type (daily→per_env, monthly→per_chunk) unless overridden in config. Safe because the load is
+  idempotent MERGE-upsert + windowed/entity-scoped sweep + the watermark only advances on a clean
+  full pass (a mid-run failure just re-runs and converges). Trade-off accepted: per_chunk is NOT
+  whole-run atomic (partial months visible mid-run) — fine for a big background monthly, which is why
+  the daily stays per_env. Applies to the delta path only; the full-refresh seed (wipe-based) stays
+  atomic per_env regardless.
+
 - **OQ-31 [user/DBA] Multi-entity keying = `Source_Env`. — DIRECTION APPROVED 2026-07-06 (user).**
   `GLTable`/`APBillTable` are shared across all Sage companies with no company discriminator, and AP
   `Record_No` (Sage per-company PK) **collides across companies** (Evergreen vs Veritashs) → MERGE-by-

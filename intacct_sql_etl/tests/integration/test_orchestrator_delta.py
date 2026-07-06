@@ -409,3 +409,35 @@ def test_effective_now_localizes_to_company_tz_when_not_injected():
     from datetime import datetime as _dt
     dt = orchestrator._effective_now(lambda: _dt(2000, 1, 1), "America/Los_Angeles", injected=False)
     assert isinstance(dt, _dt) and dt.tzinfo is None and dt.year >= 2026    # real wall-clock in tz
+
+
+# ----------------------------------------------------------------------------------------------
+# OQ-32: commit_granularity — daily = per_env (one atomic commit), monthly = per_chunk (resumable)
+# ----------------------------------------------------------------------------------------------
+
+def _two_month_client():
+    # GL data in two different month-chunks (April + July) so per-chunk commits are observable.
+    return DeltaClient(
+        gl=[{"RECORDNO": "1", "LINE_NO": "1", "_mod": datetime(2026, 4, 15, 12, 0)},
+            {"RECORDNO": "2", "LINE_NO": "1", "_mod": datetime(2026, 7, 1, 12, 0)}],
+        ap=[])
+
+
+def test_commit_granularity_daily_default_is_per_env_single_commit():
+    conn = FakeConn(wm_row=None)
+    _run(base_cfg("upsert"), _two_month_client(), conn)     # today 2026-07-02 -> daily
+    assert conn.commits == 1                                 # per_env: one atomic commit
+
+
+def test_commit_granularity_monthly_default_is_per_chunk():
+    conn = FakeConn(wm_row=None)
+    _run(base_cfg("upsert", run={"run_type_override": "monthly"}), _two_month_client(), conn)
+    assert conn.commits > 1                                  # per_chunk: commit as each chunk lands
+
+
+def test_commit_granularity_config_override_forces_per_chunk():
+    cfg = base_cfg("upsert")
+    cfg["sql"]["commit_granularity"] = "per_chunk"           # explicit override on a daily run
+    conn = FakeConn(wm_row=None)
+    _run(cfg, _two_month_client(), conn)
+    assert conn.commits > 1
