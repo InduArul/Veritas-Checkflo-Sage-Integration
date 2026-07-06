@@ -1084,3 +1084,47 @@ the load/delete must isolate per-entity so one env can't delete another's rows (
 07-02 isolation incident + prod_write_guard). Recommend: add the 100-series env to config,
 run parallel per-entity, reconcile each (this is exactly #7 + #12).
 ================================================================================
+
+================================================================================
+2026-07-06 — MULTI-ENTITY BACKFILL TEST (Veritashs) + AP Record_No COLLISION FINDING
+================================================================================
+User added Veritashs (2nd env) to config.yaml on the VM (Prod_Sage_Veritashs; creds
+already in .env: Prod_Sage_Evergreen + Prod_Sage_Veritashs). Ran an ADDITIVE upsert-only
+load (scratch/additive_load_entity.py) of Veritashs over Apr-Jul (same BATCH_DATE/WHENPOSTED
+basis as Evergreen full-refresh; NO wipe/sweep/delete — because delete paths are NOT
+entity-scoped: GL window-DELETE + AP full-wipe would clobber siblings, sql_loader.wipe_window
+L111-123 & sweep_gl L152-164). Veritashs window volumes (count-probe): GL 131,531 / AP 5,551.
+
+RESULT — the "3,210 missing AP" is CONFIRMED = the 2nd entity (Veritashs = 100-series/PHS/etc):
+  test_APBillTable 22,233 -> 25,443 (+3,210)  ==  prod APBillTable 25,443 EXACTLY.
+  AP parity test vs prod: test_only=0, prod_only=0 (was 3,210), 25,443/25,443 key-match.
+  test_GLTable 534,230 -> 665,761 (+131,531 Veritashs GL; 0 GL collisions).
+
+*** CRITICAL FINDING: AP Record_No is NOT globally unique across Sage companies. ***
+  Loaded 5,551 Veritashs AP but table grew only +3,210 => 2,341 Veritashs bills UPSERTED onto
+  EXISTING Evergreen Record_No keys (MERGE-by-Record_No, ap_key_column=Record_No) -> silently
+  OVERWROTE 2,341 Evergreen AP rows (last-writer-wins). Math reconciles prod exactly:
+  Evergreen 22,233 + Veritashs-net-new 3,210 = 25,443. GL is immune (key Record_No+Line_No uses
+  globally-unique composite IDs like 1148240-8893244-...; AP Record_No is a bare per-company int).
+  385/25,443 (1.5%) shared-key rows differ from prod, ALL entity-winner divergences (Location_ID
+  & Record_ID differ in all 385; prod winner is Evergreen-ish, ours Veritashs) => collision
+  resolution is LOAD-ORDER / timing dependent and NON-DETERMINISTIC in BOTH Make and ours. Prod's
+  AP table is itself an unstable artifact (a Record_No's entity can flip between runs). Not our
+  bug — we faithfully reproduce Make's flawed model.
+
+IMPLICATIONS / DECISION for cutover (#7/#13):
+  (a) AP key: keep Record_No (Make parity, but ~1.5% inherent instability, can't match prod
+      deterministically) OR switch to composite (MEGAENTITYID+Record_No) / Record_ID (correct,
+      globally unique, but DIVERGES from Make schema + downstream consumers must handle). USER/
+      Yosef decision — this is a real data-model defect the migration exposed.
+  (b) Delete/wipe/sweep MUST be made entity-scoped before any multi-entity cutover (else one
+      env's run deletes another's rows). Additive upsert sidesteps it but real ops needs sweep.
+  (c) Confirmed only 2 companies here (Evergreen 200-series + Veritashs 100-series); the 385 are
+      Evergreen-vs-Veritashs order flips, NOT a 3rd entity.
+
+STATE CHANGE: test tables now MULTI-ENTITY: test_GLTable=665,761  test_APBillTable=25,443
+  (2,341 Evergreen AP rows overwritten by Veritashs via collision — no longer pristine Evergreen
+  AP; re-run Evergreen to restore if needed). Gate #4's 18/19 GL parity was Evergreen-only and
+  still stands for that scope. Harness: scratch/additive_load_entity.py. config.yaml on VM now
+  has BOTH envs enabled.
+================================================================================
