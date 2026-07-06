@@ -140,6 +140,26 @@ Resolve these before coding the affected area. Owner in brackets.
 - **OQ-30 [user/DBA] Pre-flight strictness** (`specs/14`). On SQL auth failure: abort whole run + alert
   (default, fail-fast) vs continue and fail per-env.
 
+- **OQ-33 [user] Bounded parallel monthly run. — PLANNED 2026-07-06 (enhancement, post-cutover).**
+  The delta engine is sequential (one month-chunk at a time = bounded memory, the 07-02 fix). Since
+  ~94% of time is Sage extraction (I/O-wait), a **bounded** worker pool (e.g. 4) could overlap the
+  waiting and cut monthly wall-clock ~4x (Make gets ~20min by running ~20 chunks in parallel). Apply
+  to the **monthly only**; keep daily sequential (already fast). MUST cap concurrency (4-6) — NOT all
+  ~26 chunks at once (that reinvites the 07-02 swapless OOM: 4×~250MB≈1GB safe on 16GB; 26×≈6GB+ risk).
+  Needs: thread pool (I/O-bound → threads release GIL), **one DB connection per worker**, deadlock
+  retry on concurrent MERGE, per-chunk error isolation, config knob `monthly_parallelism`. **Initial
+  seed stays SEQUENTIAL** (user, 2026-07-06). Not a go-live blocker — monthly can run overnight
+  sequentially at first; parallelize as a fast-follow. NOTE: our monthly is already far lighter than
+  Make's — the UPSERT pulls only WHENMODIFIED-since-watermark (not a full re-extract), and the wide
+  sweep pulls keys-only; only the one-time initial seed is heavy.
+
+- **OQ-2 date-basis DECISION 2026-07-06 (user): KEEP the two-date GL design** (extract on BATCH_DATE,
+  delete/sweep on Entry_Date) — matches Make. Considered switching to one-date (delete on
+  GL_Posting_Date=posting date, like AP already does) to remove the rare straddle edge case (a record
+  whose posting-month != books-month could be deleted-not-reloaded). Data shows 0% straddle + 0 NULLs,
+  so it's purely theoretical here. User decided: **leave it, don't touch it** — accept the rare edge
+  case, keep Make parity. No change. (AP remains one-date on WHENPOSTED, which is fine.)
+
 - **OQ-32 [user] Commit granularity for heavy loads. — APPROVED 2026-07-06 (user).** The delta engine
   is already chunked by calendar month (bounded memory) and pages the SQL proc at 2000 rows, but it
   **commits once per env** (whole run = one transaction). For the **monthly** wide run (~26 chunks)

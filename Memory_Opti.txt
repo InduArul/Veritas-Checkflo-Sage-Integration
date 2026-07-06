@@ -1177,3 +1177,48 @@ TABLE STATE NOW: multi-entity, Source_Env-keyed. test_GLTable=666,204 test_APBil
 NEXT: OQ-32 commit_granularity (daily=per_env atomic, monthly=per_chunk resumable) — user-approved,
 build next. Then remaining path-to-prod gates. Prod cutover of Source_Env = separate (OQ-31 a-d, DBA).
 ================================================================================
+
+--- 2026-07-06 OQ-32 commit_granularity: DONE (commit 83a1ed8) ---
+Delta engine commits per month-chunk (load+sweep) when per_chunk, else once per env. Default from
+run_type (monthly->per_chunk resumable/bounded-tlog; daily->per_env atomic); override sql.commit_
+granularity. Full-refresh seed stays atomic. 3 tests; suite 257 passed. orchestrator.py deployed to VM.
+Final health: load 0, 14GB free, idle. test_GLTable=666,204 test_APBillTable=27,826.
+--- end ---
+
+================================================================================
+2026-07-06 — GATE PROGRESS: #1 PASS (+ real bug fixed), #6 PASS, #8 diagnosed
+================================================================================
+#1 CLEAN DELETE-SWEEP = PASS (in test). When_Posted now fully populated by test_AddAPBillBulk
+  (0 NULLs) so sweep windowing works. VALIDATION FOUND A REAL BUG: AP keys (sweep) query omitted
+  showprivate -> returned 7,290 vs load's 22,265 -> sweep saw ~15k loaded sub-entity bills as
+  "missing" -> would ABORT on 50% guard every night. FIXED (commit d0c7b5f): build_ap_keys_query_xml
+  renders <showprivate>true</showprivate>; _delta_query_opts threads ap.show_private into ap_keys.
+  Re-validated live: AP keys=22,265 (==load); clean sweep of an injected orphan deleted exactly 1,
+  Evergreen 22,265->22,265, Veritashs untouched, guard intact. 259 tests. (My first harness attempt
+  omitted max_delete_fraction so the guard was OFF and it deleted 14,976 Evergreen AP -> RESTORED via
+  re-upsert. Lesson: always pass the guard fraction in sweep tests.)
+  max_delete_fraction (0.5) = circuit-breaker: if a sweep would delete > this fraction of scanned
+  rows, it raises SweepGuardError (rollback+alert) instead of deleting -> protects against exactly
+  the incomplete-key-pull failure mode.
+#6 GL DATE-BASIS + WHENMODIFIED = PASS. Make GL delete field = Entry_Date (mainflow DeleteFromTable
+  "a":"Entry_Date"); extract = BATCH_DATE. Our config matches exactly. Company tz America/Los_Angeles
+  set in VM config (VM system = UTC; config tz is what makes the WHENMODIFIED cutoff company-local via
+  _effective_now/ZoneInfo). Skip/dup-safe: >since AND <=until + 1h grace overlap + idempotent MERGE
+  (grace overlap covers DST/boundary). Covered by existing delta/tz tests.
+#8 ALERTING = BLOCKED (IT), now DEFINITIVELY diagnosed: SMTP AUTH test as TimeClockPlus@
+  veritashcsolutions.com -> 535 5.7.139 "SmtpClientAuthentication is disabled for the Tenant".
+  Fix options for IT: (a) per-mailbox Set-CASMailbox -SmtpClientAuthenticationDisabled $false (min);
+  (b) tenant-wide enable; (c) switch to Graph sendMail (OQ-27) or Mimecast relay (MX=mimecast). SMTP
+  creds live in .env (SMTP_USERNAME/SMTP_PASSWORD), per secret model (NOT config.yaml).
+================================================================================
+
+--- 2026-07-06 DECISIONS (#6 date-basis, #5 monthly) ---
+#6 (OQ-2): KEEP two-date GL design (extract BATCH_DATE / delete Entry_Date = Make parity). Considered
+  one-date (delete on GL_Posting_Date like AP) to kill the rare straddle edge (posting-month!=books-
+  month -> delete-not-reload). Data = 0% straddle, 0 NULLs (purely theoretical). USER: leave it, don't
+  touch it. No code change. Gate #6 = PASS.
+#5 monthly (OQ-33): our monthly already lean (UPSERT = WHENMODIFIED-since-watermark, NOT full re-pull;
+  wide part = keys-only sweep). Only the one-time INITIAL SEED is heavy -> run SEQUENTIAL. Bounded 4x
+  parallel monthly = PLANNED enhancement (post-cutover, cap 4-6 for swapless-OOM safety, conn-per-
+  worker, deadlock retry, config knob). Not a go-live blocker.
+--- end ---
