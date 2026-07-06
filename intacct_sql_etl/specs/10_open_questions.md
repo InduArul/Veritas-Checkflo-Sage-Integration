@@ -140,6 +140,13 @@ Resolve these before coding the affected area. Owner in brackets.
 - **OQ-30 [user/DBA] Pre-flight strictness** (`specs/14`). On SQL auth failure: abort whole run + alert
   (default, fail-fast) vs continue and fail per-env.
 
+- **OQ-34 [user] Live progress log + 7-day housekeeping. — BUILT 2026-07-06.** RunLog now timestamps
+  each line and **appends it to the log file live** (tail-able mid-run; survives a crash), finalised
+  with an End-of-process line. Orchestrator emits a **per-chunk progress line** (GL/AP upsert +N,
+  sweep -N, full-refresh +N) to the logger (streamed live by run-etl.sh to run_<ts>.log) AND the run
+  log. run-etl.sh prunes `logs/` + `audit/*.json` older than **7 days** under the flock (OQ-23 done).
+  261 tests. Deployed to VM.
+
 - **OQ-33 [user] Bounded parallel monthly run. — PLANNED 2026-07-06 (enhancement, post-cutover).**
   The delta engine is sequential (one month-chunk at a time = bounded memory, the 07-02 fix). Since
   ~94% of time is Sage extraction (I/O-wait), a **bounded** worker pool (e.g. 4) could overlap the

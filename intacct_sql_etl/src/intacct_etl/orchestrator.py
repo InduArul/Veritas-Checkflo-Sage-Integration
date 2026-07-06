@@ -26,6 +26,14 @@ DELTA_MODES = ("upsert", "sweep", "sweep-upsert")
 log = logging.getLogger(__name__)
 
 
+def _progress(run_log, msg: str) -> None:
+    """Emit a per-chunk progress line to the logger (streamed live by run-etl.sh) AND the
+    live-updating run log (OQ-34), so a long run is tail-able and its progress is visible."""
+    log.info(msg)
+    if run_log:
+        run_log.add(msg)
+
+
 # ---- W1 helper (used by the dry-run parity test) ----
 def run_gl_for_window(creds, start: date, end: date, *, sage_client, loader,
                       page_size: int = 2000) -> dict:
@@ -221,8 +229,10 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
                     entry["gl_error"] = entry["gl_error"] or gl_err
                     log.warning("%s: GL delta error in chunk %s..%s: %s", name, cs, ce, gl_err)
                 entry["gl_records"] += len(gl)
-                entry["gl_loaded"] += loader.load_gl_records(gl, page_size=page_size,
-                                                             commit=commit_chunks)
+                n = loader.load_gl_records(gl, page_size=page_size, commit=commit_chunks)
+                entry["gl_loaded"] += n
+                _progress(run_log, f"{name} GL upsert {cs:%Y-%m-%d}..{ce:%Y-%m-%d}: +{n}"
+                                   + (" [committed]" if commit_chunks else ""))
                 del gl                                              # release the chunk (§13.16)
 
             wm_ap = wmmod.get_watermark(conn, wm_table, name, "AP")
@@ -237,8 +247,10 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
                     entry["ap_error"] = entry["ap_error"] or ap_err
                     log.warning("%s: AP delta error in chunk %s..%s: %s", name, cs, ce, ap_err)
                 entry["ap_records"] += len(ap)
-                entry["ap_loaded"] += loader.load_ap_records(ap, page_size=page_size,
-                                                             commit=commit_chunks)
+                m = loader.load_ap_records(ap, page_size=page_size, commit=commit_chunks)
+                entry["ap_loaded"] += m
+                _progress(run_log, f"{name} AP upsert {cs:%Y-%m-%d}..{ce:%Y-%m-%d}: +{m}"
+                                   + (" [committed]" if commit_chunks else ""))
                 del ap                                              # release the chunk (§13.16)
 
             # Post-load reconcile (sync AP links -> GL, update vendor), same as the full-refresh path
@@ -267,6 +279,7 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
                 log.info("%s: AP sweep skipped — no apbill_sweep_date_field configured "
                          "(APBillTable needs a date column to sweep safely)", name)
             for cs, ce in dates.group_chunks(dates.month_chunks(start, end), chunk_months):
+                gd0, ad0 = loader.metrics.gl_deleted, loader.metrics.ap_deleted
                 te = clock()
                 gl_keys, gk_err = client.fetch_gl_keys(session_id, cs, ce,
                                                        page_size=page_size, **gl_keys_opts)
@@ -304,6 +317,9 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
                     loader.sweep_ap(_ap_key_set(ap_keys), cs, ce, date_field=ap_date_field,
                                     commit=commit_chunks, max_delete_fraction=max_delete_fraction)
                 del ap_keys                                         # release the chunk (§13.16)
+                _progress(run_log, f"{name} sweep {cs:%Y-%m-%d}..{ce:%Y-%m-%d}: "
+                                   f"GL -{loader.metrics.gl_deleted - gd0} "
+                                   f"AP -{loader.metrics.ap_deleted - ad0}")
 
         conn.commit()
         log.info("%s: delta complete (gl=%d ap=%d gl_del=%d ap_del=%d)", name,
@@ -381,7 +397,8 @@ def _process_environment(env, *, cfg, secrets, start, end, chunks, granularity, 
                 entry["gl_error"] = entry["gl_error"] or gl_err
                 log.warning("%s: GL error in chunk %s..%s: %s", name, cs, ce, gl_err)
             entry["gl_records"] += len(gl)
-            entry["gl_loaded"] += loader.load_gl_records(gl, page_size=page_size, commit=False)
+            n = loader.load_gl_records(gl, page_size=page_size, commit=False)
+            entry["gl_loaded"] += n
 
             te = clock()
             ap, ap_err = client.fetch_ap(session_id, cs, ce, page_size=page_size, **ap_opts)
@@ -391,7 +408,9 @@ def _process_environment(env, *, cfg, secrets, start, end, chunks, granularity, 
                 entry["ap_error"] = entry["ap_error"] or ap_err
                 log.warning("%s: AP error in chunk %s..%s: %s", name, cs, ce, ap_err)
             entry["ap_records"] += len(ap)
-            entry["ap_loaded"] += loader.load_ap_records(ap, page_size=page_size, commit=False)
+            m = loader.load_ap_records(ap, page_size=page_size, commit=False)
+            entry["ap_loaded"] += m
+            _progress(run_log, f"{name} full-refresh {cs:%Y-%m-%d}..{ce:%Y-%m-%d}: GL +{n} AP +{m}")
 
             if granularity == "per_chunk":
                 if settle_s:

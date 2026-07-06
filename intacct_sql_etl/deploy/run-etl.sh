@@ -40,6 +40,12 @@ if ! flock -n 9; then
     exit 0
 fi
 
+# ---- 7-day housekeeping (OQ-23): prune run logs + audit json older than 7 days -----------------
+# Runs under the flock (single run at a time). Never fatal — housekeeping must not block a run.
+AUDIT_DIR="$APP/audit"
+find "$LOG_DIR" -maxdepth 1 -type f -mtime +7 -delete 2>/dev/null || true
+[ -d "$AUDIT_DIR" ] && find "$AUDIT_DIR" -maxdepth 1 -type f -name '*.json' -mtime +7 -delete 2>/dev/null || true
+
 # ---- load secrets/config env so the CLI's env-based secret provider resolves creds -------------
 # The ETL reads Sage + SQL secrets from the process environment (EnvSecretProvider). Cron/manual
 # invocations must load the .env first (systemd EnvironmentFile does this for unit-based runs).
