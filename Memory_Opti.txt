@@ -1275,3 +1275,20 @@ BLOCKERS TO CHASE: DBA work = ME now (acting DBA; prod When_Posted+Source_Env+pr
 RESUME NEXT: report #5 rc; then #9 (stage cron disabled) + #10 (failure drills); then #11 rotation doc.
   Production flip gated on IT(#8/#11) + #12 parallel-run cycles + sign-off + prod schema migration.
 ================================================================================
+
+--- 2026-07-06 OQ-34 follow-up: live progress log VERIFIED + Veritashs watermark seeded ---
+User noted "not much written to the log." Root causes: (a) per-chunk line only wrote AFTER a chunk's
+full Sage fetch (long fetch = silent); (b) Veritashs (new env) had NO watermark -> first delta pulled
+its whole history = big silent fetch. FIXES: added a "fetching…" line BEFORE each upsert/sweep chunk
+(commit 4e88f7b, 261 tests, deployed); seeded Veritashs GL+AP watermark (data was already loaded via
+the reload; watermark is the "current as of" marker a new env needs). DEMO proved it: log now shows
+"Evergreen GL upsert 2026-06-30..2026-07-01: fetching…" then "+78" then next chunk "fetching…" live.
+Daily upsert via run-etl.sh rc=0. Watermarks now: Evergreen+Veritashs GL+AP all seeded. Tail any run:
+/data/intacct-etl/logs/{daily,monthly}run_log_<date>.txt (live, 7-day pruned).
+KEY OPS NOTE: a newly-added env needs its watermark seeded (or an initial sequential seed run) before
+deltas are fast — else its first delta is a full-history catch-up. Ties to cutover (#13) + OQ-33.
+GATE #5 status: mechanism PROVEN (multi-chunk tiling + bounded mem ~78-114MB over many min across
+several attempts + per_chunk commit); full wide-monthly completion is slow sequentially (OQ-33 parallel
+is the fix). A representative daily/monthly upsert completes clean rc=0 with live progress.
+VPN dropped+recovered mid-session (flaky, as noted). Resume: #10 kill/timeout drills; then #11 doc.
+--- end ---
