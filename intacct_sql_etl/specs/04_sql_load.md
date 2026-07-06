@@ -95,3 +95,49 @@ partially populated (a real risk the optimization notes flagged).
   config / secret store — see `06` and the POC blocker in `../../Memory_Opti.txt` §8 (the Make
   connection's creds are redacted/unrecoverable; correct SQL credentials must be supplied).
 - Default database `Intacct`; tables and proc names configurable (schema `dbo`).
+
+---
+
+## FR-LOAD-7 — Multi-entity keying with `Source_Env` (OQ-31; added 2026-07-06)
+
+`GLTable`/`APBillTable` are **shared across every Sage company** (env), with **no column that
+identifies the source company**. This causes two defects that this requirement fixes (proven by the
+2026-07-06 multi-entity test — design: `docs/design/multi_entity_source_env_design.md`):
+
+- **AP `Record_No` collides across companies.** `RECORDNO` is Sage's **per-company** primary key
+  (sequences restart per company), so two different bills in different companies share a key. The
+  `AddAPBillBulk` MERGE keys on `Record_No` **alone** → the second company silently **overwrites**
+  the first (2,341 rows overwritten in the Apr–Jul test; resolution is load-order/non-deterministic).
+  GL is immune (key `Record_No + Line_No` is globally unique).
+- **Every delete path is entity-blind** — `wipe_window` (GL window-DELETE + AP delete) and the delta
+  sweeps operate table-wide, so one env's run would delete another env's rows.
+
+**Model (approved 2026-07-06):**
+1. Add column **`Source_Env`** (`NVARCHAR(64) NOT NULL`, = the config env `name`) to both tables,
+   stamped at load.
+2. **AP primary key = `(Source_Env, Record_No)`** — both companies coexist; deterministic; no
+   overwrite. GL key stays `(Record_No, Line_No)`; `Source_Env` added as a column for scoping.
+3. **Procs carry a `@Source_Env` parameter** (a page is single-env): `AddAPBillBulk` MERGEs on
+   `(Source_Env, Record_No)` and writes `Source_Env`; `AddGLDetailBulk` writes `Source_Env`.
+4. **`SyncAPLinksToGL` / `UpdateVendorInfoInGL` joins add `AND G.Source_Env = A.Source_Env`** —
+   `Record_ID` (the join key) is **not** unique, so without this a GL row could be stamped from the
+   wrong company's bill once two companies' AP rows share a table.
+5. **All deletes are `Source_Env`-scoped** — `wipe_window` and both sweeps carry `AND Source_Env = ?`
+   (see `13` §13.5).
+
+**Accepted divergence from Make:** with the AP key including `Source_Env`, both companies' bills
+persist, so `APBillTable` holds **more** rows than Make's collision-collapsed prod table
+(Apr–Jul test: ~27,784 vs prod's 25,443). This is a deliberate **correctness fix** — prod's count is
+a lossy, non-deterministic artifact. Downstream consumers of these tables must handle the new column
+and the higher AP count.
+
+**Discriminator choice (why `Source_Env`, not `Location_ID` or `Record_ID`):** `Location_ID`
+(= `MEGAENTITYID`) is not a clean company key — it is NULL on many rows and one company spans many
+locations. `Record_ID` (document number) is not unique (e.g. `"Placker Charles REFUND"` on multiple
+bills). `RECORDNO` was verified unique **within** each company (Evergreen 20,834 / Veritashs 2,204,
+0 in-company dups) — so `(Source_Env, Record_No)` is a valid PK.
+
+**Isolation:** all of the above is applied to the **`test_`** tables and **`test_`** procs only; the
+prod tables/procs Make uses are untouched. The equivalent prod schema/proc change is a separate,
+gated cutover step coordinated with the DBA + downstream owners (OQ-31 a–d). This is the one place
+CLAUDE.md's "procs are black boxes" rule is deliberately opened — the merge key lives in the proc.

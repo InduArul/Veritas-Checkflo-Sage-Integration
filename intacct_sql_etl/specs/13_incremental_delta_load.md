@@ -75,6 +75,8 @@ Removes SQL rows that were **deleted in Intacct**. `WHENMODIFIED` deltas can nev
 
 **Mass-delete guard (both GL and AP).** `sql.sweep_max_delete_fraction` (default 0.5): if a sweep would delete more than this fraction of the rows it scanned, it **raises `SweepGuardError`** → the env transaction rolls back and the run is flagged/alerted. Defense-in-depth against any mis-scoped/partial key pull silently wiping a window.
 
+**Entity scoping (`Source_Env`) — added 2026-07-06 (OQ-31, `04` FR-LOAD-7).** `GLTable`/`APBillTable` are **shared across all Sage companies**, and AP `Record_No` (Sage's per-company PK) **collides across companies**. Every sweep step therefore scopes to the env being processed: the window key-read **and** the delete both carry `AND Source_Env = ?`, so an env's sweep only ever compares/deletes **its own** rows — a sibling company's rows are never candidates for deletion (they are not "missing," they simply belong to another env). Same scoping applies to the full-refresh `wipe_window` (GL window-DELETE + AP delete) and the upsert (procs carry the env via a `@Source_Env` parameter). See `04` FR-LOAD-7 for the key/schema model and the accepted divergence from Make.
+
 - **Does not use the watermark** (stateless point-in-time comparison).
 - Sweep **window/scope differs by run type** (§13.7).
 
