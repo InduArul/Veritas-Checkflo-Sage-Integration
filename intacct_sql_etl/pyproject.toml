@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "intacct_sql_etl"
-version = "0.1.1"
+version = "0.1.2"
 description = "Sage Intacct -> SQL Server ETL (Python rebuild of the Make 'Intaact feeds to SQL' family)"
 readme = "README.md"
 requires-python = ">=3.10"
