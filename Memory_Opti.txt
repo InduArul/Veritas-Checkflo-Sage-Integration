@@ -1343,3 +1343,69 @@ untouched. TOMORROW: review the reconcile drift report(s) + confirm the schedule
 (rc=0), then continue (threshold tuning, OQ-8 tz confirm, IT reply, prod migration, sign-off).
 Nothing pushed; nothing on prod. Safe unattended (flock + mem cap + timeout guardrails; linger ON).
 --- end ---
+
+--- 2026-07-07 *** VM SSH ACCESS — ALWAYS USE THE WINDOWS SSH DOOR FIRST *** ---
+VM = host alias `vtsvm` (10.88.102.40), user vtsazplw01-admin, key ~/.ssh/veritas_vm (ED25519
+SHA256:T/cLB...pAJlc, "indu-veritas-dev"). The PRIVATE KEY IS PASSPHRASE-PROTECTED (aes256-ctr/bcrypt).
+It is loaded PERSISTENTLY in the WINDOWS ssh-agent service (Get-Service ssh-agent = Running/Automatic;
+Windows agent stores keys in registry -> SURVIVES REBOOT). So the unlocked key is only reachable via the
+WINDOWS OpenSSH binary, NOT Git-Bash ssh.
+  RULE: to reach the VM, from the BASH tool call the Windows binary directly:
+    /c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes vtsvm '<remote cmd>'
+  WHY NOT the obvious ways:
+   - Git-Bash /usr/bin/ssh CANNOT see the Windows agent (SSH_AUTH_SOCK empty) -> offers key, server
+     "accepts key" then "Permission denied" (can't sign the passphrase key non-interactively).
+   - PowerShell tool + ssh.exe WORKS for auth but PS 5.1 SWALLOWS ssh stdout (native-exe quirk) ->
+     "completed with no output". So drive ssh.exe from the BASH tool for clean captured output.
+  DO NOT re-add the pubkey / generate new keys / chase authorized_keys — the key & server are FINE;
+  earlier "Permission denied" was purely wrong-door (Git ssh vs Windows agent). Just use the Windows door.
+--- end ---
+
+--- 2026-07-07 GATE #12 SOAK — DAY-1 REVIEW (AM India / ~02:40 ET on box) ---
+BOX TZ = UTC (date -> "...UTC 2026"). Overnight SCHEDULED runs SUCCEEDED, rc=0:
+  - nightly sweep-upsert  run_20260707T010001Z.log: End ok=True, delete-detection live
+    (Veritashs gl_del=4; totals deleted=8), EVG gl=1847/ap=425, VTS gl=658/ap=185. rc=0.
+  - evening upsert        run_20260706T181001Z.log: End ok=True, VTS AP +10, gl=749/ap=10. rc=0.
+  No errors, no Intacct collision.
+*** FINDING (needs fix): CRON_TZ=America/New_York is NOT being honored — user-crontab jobs fire on
+  UTC face-value, not Eastern. Evidence: 18:10 & 01:00 entries produced logs at 18:10Z & 01:00Z (would
+  be 22:10Z & 05:00Z if EDT). => the "+40min-after-Make (Eastern)" anti-overlap design is NOT in effect;
+  jobs run ~3-4h off intended slots. No collision happened (lucky), but FIX before relying on offset:
+  either make cron honor CRON_TZ (Vixie vs cronie/systemd behavior on this box), or convert the 5 entries
+  to UTC equivalents of the Eastern targets. Also note: reconcile fires 09:30 *UTC* today (~3h out), not
+  09:30 ET. Only reconcile_20260706.txt (day-0 baseline) exists yet; reconcile_20260707.txt pending.
+RESUME: (1) fix cron TZ (UTC-convert or honor CRON_TZ); (2) after ~09:30Z read reconcile_20260707.txt +
+  trend; (3) OQ-8 Sage company tz; (4) IT reply (#8 SMTP/#11 vault); (5) prod migration + Yosef sign-off.
+--- end ---
+
+--- 2026-07-07 TZ DECISION (user: "ALL timezones = client = New York") + 2 AUDITABILITY GAPS ---
+TZ ROOT CAUSE: crontab CRON_TZ line is CLEAN (cat -A: no ^M) but this Ubuntu cron 3.0pl1-184ubuntu2
+  does NOT honor CRON_TZ (Debian/Ubuntu cron limitation vs cronie) -> jobs ran on box tz = Etc/UTC.
+  Hardcoded UTC offsets are WRONG (America/New_York has DST). Correct fix = set BOX tz to NY.
+DONE (no sudo): config.yaml run.timezone America/Los_Angeles -> America/New_York (OQ-8 resolved to
+  client=Eastern). Backup: /data/intacct-etl/config.yaml.bak.20260707. Existing crontab TIMES
+  (40 8, 10 18, 0 1, 30 9) are ALREADY the intended Eastern targets — once box tz=NY they fire
+  correctly, NO crontab time edit needed.
+PENDING (needs USER sudo — my ssh sudo = SUDO_NEEDS_PASSWORD): run on VM:
+    sudo timedatectl set-timezone America/New_York
+  After that: cron + app both on NY (DST-safe). One-time effect: the incremental WHENMODIFIED cutoff
+  shifts ~3h (LA->NY) -> tomorrow's reconcile may show a one-cycle discontinuity (NOT real drift);
+  the nightly 01:00 sweep re-pulls full window and heals any gap. No manual sweep needed.
+AUDIT GAP #1 (deletes): sweep deleted 8 GL rows (EVG gl_del=4, VTS gl_del=4; AP 0) but the KEYS ARE
+  NOT LOGGED anywhere — INFO log + audit JSON show only count 'deleted':8; no deletes manifest;
+  rows hard-deleted. => the specific 8 CANNOT be validated after the fact. Circumstantial validity:
+  sweep pull was COMPLETE (gl_pages=1 each env, no errors, ok=True) so delete-detection acted on a
+  full Intacct snapshot; delete = test_ row absent from complete Apr-Jul pull (correct by design).
+  Prod cross-check INCONCLUSIVE: Make prod does NO delete-detection (keeps everything) so PROD_EXTRA_
+  GL_IN_WINDOW=1098 is expected/structural (book_filter ACCRUAL, Make no-delete), not over-deletion.
+AUDIT GAP #2 (new-vs-updated): test_GLTable/test_APBillTable have NO load/updated TIMESTAMP column,
+  and audit rows_affected=0 in EVERY run (metric not wired to real DB rowcount). => cannot split
+  "newly added" vs "updated" post-hoc. Evening 18:10 run loaded 1205 (EVG 446 = gl414+ap32;
+  VTS 759 = gl749+ap10); VTS AP delta "+10"; but insert-vs-update split not measurable.
+FIX (both gaps, TDD->WAVES per CLAUDE.md): (a) orchestrator logs deleted keys (Record_No+Line_No /
+  Source_Env+Record_No) into audit JSON + deletes log, ideally archive to test_GL_deleted_archive;
+  (b) capture proc rows_affected OR add a load_batch_id/loaded_at col to split insert/update.
+ROWCOUNTS 2026-07-07 07:2xZ: test_GLTable=668,747 (baseline 666,586); test_APBillTable=28,073
+  (baseline 27,826; vs prod APBillTable 25,691 -> +2,382 = known Source_Env keep-both diff);
+  prod GLTable=5,106,622 (full history).
+--- end ---

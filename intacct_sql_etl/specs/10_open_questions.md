@@ -31,9 +31,12 @@ Resolve these before coding the affected area. Owner in brackets.
 - **OQ-7 [user] Session reuse scope.** Make logs in once **per environment**. Acceptable to keep; could
   one login serve the whole run if same company? (Minor; default = per-env, matches Make.)
 
-- **OQ-8 [user] Schedule timezone + weekdays.** Exact cron, timezone, and active days for the 08:00 /
-  17:30 runs aren't in the blueprint. Confirm from Make scheduling settings (the check-pipeline Part1
-  used MoWeSa / TuThFr splits — does the SQL feed run all 7 days?).
+- **OQ-8 [RESOLVED 2026-07-07 · user] Schedule timezone.** Client timezone = **America/New_York**
+  (Eastern). Applied: `config.yaml run.timezone` → `America/New_York` (was placeholder
+  `America/Los_Angeles`); VM box tz → `America/New_York`. NOTE: Ubuntu `cron 3.0pl1` does **not** honor
+  `CRON_TZ`, so the schedule must run on **box-local** tz — hence the box-tz change (not CRON_TZ). Runs
+  stay +40 min after Make's 08:00/17:30 ET. *Still open (weekdays):* confirm the SQL feed runs all 7
+  days vs the check-pipeline MoWeSa/TuThFr splits.
 
 - **OQ-9 [user] Alerting/DLQ.** What channel for degraded-run alerts (email/monitoring)? Replaces Make's
   `dlq` + the silent-overage gap. Where to persist failed windows for replay?
@@ -92,6 +95,11 @@ Resolve these before coding the affected area. Owner in brackets.
   The audit trail records `rows_affected` (total touched). A true inserted-vs-updated breakdown
   (`specs/12` FR-AUD-5) requires the proc to OUTPUT counts or return a result set. Confirm whether the
   procs can expose this; until then `rows_affected` is the monitored metric.
+  **UPDATE 2026-07-07 (soak):** `rows_affected` is **0 in EVERY parallel-run audit** — including the
+  nightly sweep that loaded 3,115 rows. So the *total-touched proxy itself is not being captured*
+  (proc returns `-1`/no rowcount — likely `SET NOCOUNT ON` or the OPENJSON merge). This is now a
+  **DEFECT (the monitored metric is dead)**, not merely a missing split. Fix + tests queued in
+  `docs/design/W8_observability_delete_audit.md`.
 
 - **OQ-13 [DBA] GL count `numremaining+1`.** Confirm this correctly equals total rows in all cases (it
   assumes the pagesize-1 probe returns 1 row + N remaining). Edge case: zero-row windows → numremaining=0
