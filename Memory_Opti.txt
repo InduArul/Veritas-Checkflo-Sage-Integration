@@ -1409,3 +1409,61 @@ ROWCOUNTS 2026-07-07 07:2xZ: test_GLTable=668,747 (baseline 666,586); test_APBil
   (baseline 27,826; vs prod APBillTable 25,691 -> +2,382 = known Source_Env keep-both diff);
   prod GLTable=5,106,622 (full history).
 --- end ---
+
+--- 2026-07-07 W8 OBSERVABILITY INCREMENT — BUILT (TDD) + DEPLOYED to VM ---
+WAVES W->A->V->E->S all green. Commits: be8ab13 (code+tests), + version bump 0.1.1->0.1.2.
+CODE: sweep_gl/sweep_ap now capture deleted KEYS -> audit JSON (EnvAudit.*_deleted_keys) +
+  deletes_{run_id}.jsonl (audit dir; override audit.deletes_dir). _exec_proc_json no longer clamps
+  the proc's -1 to 0 -> record_page sets *_rows_affected_known=False (honest metric, OQ-15 base case).
+  9 new tests; full suite 270 GREEN (local 3.14 + VM 3.12); code review pass 4 CLOSED (0 findings).
+  DEFERRED: A3 archive tables (DBA), insert/update split (proc OUTPUT, OQ-15 stays open).
+DEPLOY (VM /data/intacct-etl, deploy model = pip install versioned source dir into venv site-packages):
+  bundled repo -> scp -> /data/intacct-etl/intacct_sql_etl-0.1.2 -> pip install --no-deps --force-reinstall.
+  VERIFIED: pip version 0.1.2; smoke import (all new API present); 270 tests green on venv py3.12;
+  intacct-etl --help OK. Next scheduled runs use 0.1.2 (nightly 01:00 ET sweep will emit deleted-key
+  logs + honest rows_affected).
+  ROLLBACK if needed: site-packages backup at
+    /data/intacct-etl/venv/lib/python3.12/site-packages/intacct_etl.bak.20260707
+    -> restore: rm -rf .../site-packages/intacct_etl && mv .../intacct_etl.bak.20260707 .../intacct_etl
+    (or `venv/bin/pip install --no-deps --force-reinstall /data/intacct-etl/intacct_sql_etl-0.1.1`).
+RESUME: watch tonight 18:10 ET upsert + 01:00 ET sweep on 0.1.2 (deletes log should appear); confirm
+  reconcile trend; then OQ-15 split + A3 archive tables (SELF-OWNED — see standing rule below).
+--- end ---
+
+================================================================================
+*** STANDING RULE (2026-07-07, user) — NO SEPARATE DBA: CLAUDE WEARS THE DBA HAT ***
+================================================================================
+There is NO external DBA on this engagement. I (Claude) own ALL database work in addition to the
+app/ETL build: test_ table + proc provisioning, DDL, indexes, stored-proc authoring/changes (test_
+variants), schema migrations, and the prod schema migration at cutover.
+IMPLICATIONS — reclassify every "[DBA]" / "deferred to DBA" item as SELF-OWNED and actionable (NOT
+externally blocked):
+  - OQ-15 (insert/update split) — I author the test_ proc change to OUTPUT (inserted,updated); no waiting.
+  - W8 Item A3 (test_GL_deleted_archive / test_AP_deleted_archive) — I create the test_ tables + wire.
+  - WAVES "blocked on DBA (OQ-1/OQ-11/OQ-14)" and prod schema migration ("DBA=me") — all mine.
+GUARDRAILS UNCHANGED: DBA hat does NOT relax CLAUDE.md #3 — dev/test writes remain test_-prefixed only,
+prod tables/procs (GLTable, APBillTable, the 4 procs) stay FORBIDDEN until cutover with explicit user
+auth; prod_write_guard hook still binds; every DDL/proc change follows TDD (failing test first) + the
+WAVES gates. "I'm the DBA" = I do the work, same safety rails.
+================================================================================
+
+--- 2026-07-07 W8 OBSERVABILITY #2 — OQ-15 SPLIT + A3 ARCHIVE: BUILT (TDD) + DEPLOYED 0.1.3 ---
+Commit 9c2d292 (code+tests+proc SQL+DDL), version 0.1.2->0.1.3. WAVES W..S all green; review pass 5 CLOSED.
+OQ-15 RESOLVED: both test_ MERGE procs now OUTPUT $action -> authoritative (inserted,updated) result set;
+  loader _exec_proc_json reads it (defensive _first_row); metrics/audit gain gl/ap_inserted+updated;
+  rows_affected=inserted+updated, known=True. MERGE data logic UNCHANGED -> parity preserved.
+A3 DONE: test_GL_deleted_archive (20->22 cols) + test_AP_deleted_archive (9->11 cols), schema-mirror +
+  run_id + deleted_at; sweep archives each full row BEFORE delete, gated by sql.archive_deletes (ENABLED
+  in live config.yaml); run_id threaded from orchestrator. 5 new tests; suite 274 GREEN (local + would-be VM).
+LIVE APPLY (self-DBA, all test_-scoped): procs ALTERed on live DB; archive tables created; verified
+  OUTPUT present + arch cols=base+2 + NO identity on base. PRE-FLIGHT on real pyodbc (rolled back, no
+  persist): insert-> ins1/upd0/known True, re-load-> upd1. Parity reconcile ran = KNOWN baseline drift
+  (test_only=421, value_mismatch=95~stable; NOT a regression — my change had not loaded yet).
+ROLLBACK ARTIFACTS (2026-07-07):
+  - procs: /data/intacct-etl/reference_sql_backup_20260707/{test_AddGLDetailBulk,test_AddAPBillBulk}.bak.sql
+           (re-run each as ALTER to revert the OUTPUT change)
+  - package: site-packages/intacct_etl.bak.pre013.20260707 (0.1.2) ; also .bak.20260707 (0.1.1)
+  - config: /data/intacct-etl/config.yaml.bak.w8archive.20260707 (pre-archive_deletes)
+FIRST REAL EXERCISE: tonight 18:10 ET upsert -> audit shows gl/ap_inserted+updated (known=true);
+  01:00 ET sweep -> deletes_{run_id}.jsonl + rows archived to test_*_deleted_archive. VERIFY tomorrow.
+--- end ---
