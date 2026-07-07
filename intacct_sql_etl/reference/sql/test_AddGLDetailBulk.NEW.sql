@@ -1,6 +1,8 @@
 -- NEW test_AddGLDetailBulk — writes Source_Env (OQ-31, specs/04 FR-LOAD-7).
 -- Change vs CAPTURED baseline: + @Source_Env param; GL key (Record_No,Line_No) unchanged
 -- (globally unique); Source_Env written on INSERT and set on UPDATE.
+-- W8/OQ-15: MERGE OUTPUTs $action -> proc returns an authoritative (inserted, updated) result set.
+--   The MERGE data logic is UNCHANGED (same rows written) -> parity preserved.
 ALTER PROCEDURE [dbo].[test_AddGLDetailBulk]
     @json NVARCHAR(MAX),
     @Source_Env NVARCHAR(64)
@@ -8,6 +10,8 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
+
+    DECLARE @acts TABLE (act NVARCHAR(10));   -- OQ-15: capture per-row MERGE action
 
     ;WITH Parsed AS
     (
@@ -83,5 +87,11 @@ BEGIN
             src.Account_No, src.Account_Title, src.Entry_Date, src.GL_Posting_Date,
             src.Vendor_ID, src.Vendor_Name, src.Line_No, src.Bill_No, src.Base_Amount,
             src.Description, src.Memo, src.Journal
-        );
+        )
+    OUTPUT $action INTO @acts;
+
+    SELECT
+        inserted = SUM(CASE WHEN act = 'INSERT' THEN 1 ELSE 0 END),
+        updated  = SUM(CASE WHEN act = 'UPDATE' THEN 1 ELSE 0 END)
+    FROM @acts;
 END;

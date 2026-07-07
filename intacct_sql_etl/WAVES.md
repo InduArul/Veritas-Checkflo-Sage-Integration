@@ -129,8 +129,12 @@ gates. Status is tracked in the wave-plan table above.
    - [x] **W8·observability increment (2026-07-07)** — delete-sweep now records WHICH keys were removed
          (audit JSON + `deletes_{run_id}.jsonl`); `rows_affected` no longer clamps the proc's `-1` to a
          silent `0` (honest `*_rows_affected_known` flag). 9 new tests, **270 green**, review pass 4
-         CLOSED. Deferred: A3 archive tables (DBA), insert/update split (OQ-15). See
-         `docs/design/W8_observability_delete_audit.md`.
+         CLOSED. See `docs/design/W8_observability_delete_audit.md`.
+   - [x] **W8·observability #2 (2026-07-07)** — OQ-15 RESOLVED: both `test_` MERGE procs `OUTPUT $action`
+         → authoritative `(inserted, updated)` split surfaced in the audit. A3 DONE: `test_GL/AP_deleted_
+         archive` tables + sweep archives each row before delete (config `archive_deletes`). No external
+         DBA — DB work self-owned. **274 green**, review pass 5 CLOSED. `reference/sql/*.NEW.sql` +
+         `migration_delete_archive.sql`.
 
 > **Offline-tested:** all pure logic + full extract→transform→load→reconcile orchestration via injected
 > fakes/mocks, response parsers, connection-string assembly, run-log, CLI, and dry-run parity.

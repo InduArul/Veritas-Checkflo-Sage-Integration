@@ -84,6 +84,11 @@ sql:
   #                                       # (never a destructive full-table compare). Needs DBA to add
   #                                       # the column + have test_AddAPBillBulk populate it (OQ-26).
   sweep_max_delete_fraction: 0.5      # abort a sweep that would delete > this fraction of scanned rows
+  # W8 A3: archive each swept row (full row + run_id + deleted_at) BEFORE deleting it — recoverable
+  # audit trail of delete-detection. Requires reference/sql/migration_delete_archive.sql applied.
+  archive_deletes: false              # true to enable (test_ only)
+  gl_deleted_archive_table: dbo.test_GL_deleted_archive
+  ap_deleted_archive_table: dbo.test_AP_deleted_archive
   load_strategy: transaction          # transaction | staging_swap (OQ-5; staging not yet implemented)
   # commit_granularity: per_env       # OQ-32: per_env (atomic, default for daily) | per_chunk (commit
   #                                     each month-chunk — resumable, bounded t-log; default for monthly).

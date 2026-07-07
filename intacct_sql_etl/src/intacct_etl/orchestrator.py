@@ -185,7 +185,8 @@ def _ap_key_set(records):
 def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start, end, cutoff,
                                grace, page_size, require_test, strategy, settle_s, sleep,
                                max_delete_fraction, chunk_months, opts, connect,
-                               sage_client_factory, run_log, clock, now, commit_chunks=False):
+                               sage_client_factory, run_log, clock, now, commit_chunks=False,
+                               run_id=None):
     """Delta run for one environment (specs/13): watermark-driven upsert and/or delete-sweep,
     inside a single transaction. Watermark advances per object only on a clean fetch (§13.11).
     Never raises — failures isolated like the full-refresh path."""
@@ -208,7 +209,7 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
         creds = cfgmod.resolve_env_creds(cfg, env, secrets)
         conn = connect(sql_cfg, secrets)
         loader = SqlLoader(conn, sql_cfg, source_env=name,
-                           require_test_targets=require_test, clock=clock)
+                           require_test_targets=require_test, clock=clock, run_id=run_id)
         client = sage_client_factory(creds)
         session_id = client.login()
 
@@ -364,7 +365,7 @@ def _process_environment_delta(env, *, do_upsert, do_sweep, cfg, secrets, start,
 def _process_environment(env, *, cfg, secrets, start, end, chunks, granularity, page_size,
                          require_test, strategy, gl_opts, ap_opts, connect,
                          sage_client_factory, settle_s, sleep, run_log,
-                         clock, now) -> tuple[dict, "auditmod.EnvAudit"]:
+                         clock, now, run_id=None) -> tuple[dict, "auditmod.EnvAudit"]:
     """Run one environment end-to-end inside a single transaction (CR-12 extraction).
 
     Returns (result entry, EnvAudit). Never raises — per-environment failures are isolated and
@@ -386,7 +387,7 @@ def _process_environment(env, *, cfg, secrets, start, end, chunks, granularity, 
         creds = cfgmod.resolve_env_creds(cfg, env, secrets)
         conn = connect(cfg["sql"], secrets)
         loader = SqlLoader(conn, cfg["sql"], source_env=env["name"],
-                           require_test_targets=require_test, clock=clock)
+                           require_test_targets=require_test, clock=clock, run_id=run_id)
         client = sage_client_factory(creds)
 
         loader.wipe_window(start, end, commit=False)
@@ -474,6 +475,10 @@ def _build_env_audit(name, entry, loader, *, extract_s, started_at, finished_at,
     ap_pages = getattr(loader.metrics, "ap_pages", 0) if loader else 0
     gl_affected = getattr(loader.metrics, "gl_rows_affected", 0) if (loader and committed) else 0
     ap_affected = getattr(loader.metrics, "ap_rows_affected", 0) if (loader and committed) else 0
+    gl_ins = getattr(loader.metrics, "gl_inserted", 0) if (loader and committed) else 0
+    ap_ins = getattr(loader.metrics, "ap_inserted", 0) if (loader and committed) else 0
+    gl_upd = getattr(loader.metrics, "gl_updated", 0) if (loader and committed) else 0
+    ap_upd = getattr(loader.metrics, "ap_updated", 0) if (loader and committed) else 0
     gl_deleted = getattr(loader.metrics, "gl_deleted", 0) if (loader and committed) else 0
     ap_deleted = getattr(loader.metrics, "ap_deleted", 0) if (loader and committed) else 0
     # W8 observability: WHICH keys were swept + whether the rows_affected metric was captured.
@@ -494,6 +499,7 @@ def _build_env_audit(name, entry, loader, *, extract_s, started_at, finished_at,
         gl_loaded=entry["gl_loaded"] if committed else 0,
         ap_loaded=entry["ap_loaded"] if committed else 0,
         gl_rows_affected=gl_affected, ap_rows_affected=ap_affected,
+        gl_inserted=gl_ins, ap_inserted=ap_ins, gl_updated=gl_upd, ap_updated=ap_upd,
         gl_rows_affected_known=gl_affected_known, ap_rows_affected_known=ap_affected_known,
         gl_pages=gl_pages, ap_pages=ap_pages,
         gl_deleted=gl_deleted, ap_deleted=ap_deleted,
@@ -558,7 +564,7 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
                 settle_s=settle_s, sleep=sleep, max_delete_fraction=max_delete_fraction,
                 chunk_months=chunk_months, opts=delta_opts, connect=connect,
                 sage_client_factory=sage_client_factory, run_log=run_log, clock=clock, now=now,
-                commit_chunks=commit_chunks,
+                commit_chunks=commit_chunks, run_id=run_audit.run_id,
             )
         else:
             entry, env_audit = _process_environment(
@@ -566,7 +572,7 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
                 granularity=granularity, page_size=page_size, require_test=require_test,
                 strategy=strategy, gl_opts=gl_opts, ap_opts=ap_opts, connect=connect,
                 sage_client_factory=sage_client_factory, settle_s=settle_s, sleep=sleep,
-                run_log=run_log, clock=clock, now=now,
+                run_log=run_log, clock=clock, now=now, run_id=run_audit.run_id,
             )
         result.environments[env["name"]] = entry
         run_audit.environments.append(env_audit)

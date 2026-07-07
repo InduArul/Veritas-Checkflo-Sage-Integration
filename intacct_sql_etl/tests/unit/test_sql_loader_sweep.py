@@ -211,6 +211,40 @@ def test_sweep_no_delete_captures_no_keys():
     assert ld.metrics.gl_deleted_keys == []                  # empty, not None
 
 
+# ---- W8 A3: archive the full row BEFORE deleting it (recoverable/inspectable) ----
+
+CFG_ARCH = dict(CFG, archive_deletes=True,
+                gl_deleted_archive_table="test_GL_deleted_archive",
+                ap_deleted_archive_table="test_AP_deleted_archive")
+
+
+def test_sweep_gl_archives_row_before_delete():
+    conn = FakeConnection([("100", "1"), ("101", "1")])
+    ld = sql_loader.SqlLoader(conn, CFG_ARCH, source_env=ENV, run_id="RID1")
+    ld.sweep_gl({("100", "1")}, S, E)                        # 101/1 is deleted
+    calls = ld.conn.cur.calls
+    ins = [i for i, c in enumerate(calls) if "INSERT INTO test_GL_deleted_archive" in c[0]]
+    dels = [i for i, c in enumerate(calls) if c[0].upper().startswith("DELETE FROM")]
+    assert len(ins) == 1 and len(dels) == 1
+    assert ins[0] < dels[0]                                  # archive BEFORE delete
+    assert calls[ins[0]][1] == ("RID1", "101", "1", ENV)    # run_id + key + source_env bound
+
+
+def test_sweep_ap_archives_row_before_delete():
+    conn = FakeConnection([("200",), ("201",)])
+    ld = sql_loader.SqlLoader(conn, CFG_ARCH, source_env=ENV, run_id="RID2")
+    ld.sweep_ap({("200",)}, S, E, date_field="When_Posted")
+    calls = ld.conn.cur.calls
+    ins = [c for c in calls if "INSERT" in c[0].upper() and "test_AP_deleted_archive" in c[0]]
+    assert len(ins) == 1 and ins[0][1] == ("RID2", "201", ENV)
+
+
+def test_sweep_does_not_archive_when_disabled():
+    ld = _loader([("100", "1"), ("101", "1")])              # CFG has no archive_deletes
+    ld.sweep_gl({("100", "1")}, S, E)
+    assert not [c for c in ld.conn.cur.calls if "archive" in c[0].lower()]
+
+
 def test_ap_sweep_2027_never_touches_out_of_window_history():
     conn = _DatedConn(ap=[
         (("2024B",), date(2024, 9, 1)),                   # out of window (must survive)

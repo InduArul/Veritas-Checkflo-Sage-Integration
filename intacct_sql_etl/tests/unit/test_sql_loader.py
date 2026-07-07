@@ -11,13 +11,17 @@ from intacct_etl import config, sql_loader
 
 
 class FakeCursor:
-    def __init__(self, rowcount=7):
+    def __init__(self, rowcount=7, counts=(5, 2)):
         self.calls = []
         self.closed = False
         self.rowcount = rowcount
+        self._counts = counts            # OQ-15: proc now returns a (inserted, updated) result set
 
     def execute(self, sql, params=None):
         self.calls.append((sql, params))
+
+    def fetchone(self):
+        return self._counts
 
     def close(self):
         self.closed = True
@@ -109,34 +113,42 @@ def _counter():
 
 
 def test_loader_captures_metrics():
-    # specs/12 FR-AUD-3/4: pages, rows_affected, encode + db timings per object
+    # specs/12 FR-AUD-3/4 + OQ-15: pages, inserted/updated split, encode + db timings per object
     conn = FakeConnection()
     loader = sql_loader.SqlLoader(conn, TEST_SQL_CFG, clock=_counter())
-    loader.load_gl_records(_records(5), page_size=2)      # 5 rows / 2 -> 3 pages
+    loader.load_gl_records(_records(5), page_size=2)      # 5 rows / 2 -> 3 pages, each proc -> (5,2)
     m = loader.metrics
     assert m.gl_pages == 3
-    assert m.gl_rows_affected == 3 * 7                    # FakeCursor.rowcount == 7 per page
+    assert m.gl_inserted == 3 * 5 and m.gl_updated == 3 * 2       # OQ-15 authoritative split
+    assert m.gl_rows_affected == 3 * 7                           # inserted + updated
+    assert m.gl_rows_affected_known is True
     assert m.gl_encode_s == 3.0 and m.gl_db_s == 3.0      # 1.0s each per page (fake clock)
 
 
-# ---- W8 observability Item B: honest rows_affected (don't hide the proc's "-1 = no count") ----
+# ---- rows_affected honesty + OQ-15 split: metric comes from the proc's (inserted,updated) result set ----
 
-class _RowcountCursor:
-    def __init__(self, rowcount):
+class _CountsCursor:
+    def __init__(self, counts):
         self.calls = []
         self.closed = False
-        self.rowcount = rowcount
+        self.rowcount = -1
+        self._counts = counts            # a (inserted, updated) tuple, or None to simulate "no result set"
 
     def execute(self, sql, params=None):
         self.calls.append((sql, params))
+
+    def fetchone(self):
+        if self._counts is None:
+            raise Exception("No results.  Previous SQL was not a query.")   # pyodbc when no result set
+        return self._counts
 
     def close(self):
         self.closed = True
 
 
-class _RowcountConn:
-    def __init__(self, rowcount):
-        self.cur = _RowcountCursor(rowcount)
+class _CountsConn:
+    def __init__(self, counts):
+        self.cur = _CountsCursor(counts)
         self.commits = 0
 
     def cursor(self):
@@ -149,19 +161,22 @@ class _RowcountConn:
         pass
 
 
-def test_rowcount_unknown_not_clamped_to_zero():
-    # The bulk proc returns -1 when it reports no rowcount. Today max(0,...) hides that as a silent 0.
-    # W8: a run where the count is UNCAPTURED must be distinguishable from a genuine zero-change run.
-    loader = sql_loader.SqlLoader(_RowcountConn(-1), TEST_SQL_CFG)
+def test_rows_affected_unknown_when_proc_returns_no_counts():
+    # Old/un-migrated proc returns no result set. The metric must be flagged UNKNOWN, not a silent 0
+    # (a genuinely-zero-change run stays distinguishable from an uncaptured one).
+    loader = sql_loader.SqlLoader(_CountsConn(None), TEST_SQL_CFG)
     loader.load_gl_records(_records(2), page_size=10)
-    assert loader.metrics.gl_rows_affected_known is False     # metric was not captured
-    assert loader.metrics.gl_rows_affected == 0               # numeric stays int-safe
+    assert loader.metrics.gl_rows_affected_known is False
+    assert loader.metrics.gl_rows_affected == 0
+    assert loader.metrics.gl_inserted == 0 and loader.metrics.gl_updated == 0
 
 
-def test_rowcount_real_change_counted_and_known():
-    loader = sql_loader.SqlLoader(_RowcountConn(4), TEST_SQL_CFG)
-    loader.load_gl_records(_records(2), page_size=10)         # 1 page, rowcount 4
-    assert loader.metrics.gl_rows_affected == 4
+def test_split_counts_from_proc_result_set():
+    # OQ-15: the MERGE proc OUTPUTs (inserted, updated) -> authoritative split.
+    loader = sql_loader.SqlLoader(_CountsConn((3, 1)), TEST_SQL_CFG)
+    loader.load_gl_records(_records(2), page_size=10)         # 1 page -> (3 inserted, 1 updated)
+    assert loader.metrics.gl_inserted == 3 and loader.metrics.gl_updated == 1
+    assert loader.metrics.gl_rows_affected == 4               # inserted + updated
     assert loader.metrics.gl_rows_affected_known is True
 
 

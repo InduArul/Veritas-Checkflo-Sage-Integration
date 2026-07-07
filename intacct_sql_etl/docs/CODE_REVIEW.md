@@ -305,3 +305,35 @@ happy path. **Data-neutral:** load/sweep SQL + committed rows are byte-identical
 (43 reconciliation/integration tests green).
 
 **Verification:** `PYTHONPATH=src python -m pytest -q` → **270 passed**.
+
+## Review pass 5 — W8 observability #2: OQ-15 insert/update split + A3 delete archive
+
+**Date:** 2026-07-07. **Method:** manual adversarial review + full suite. **Scope:** both `test_` MERGE
+procs now `OUTPUT $action` → return `(inserted, updated)`; `sql_loader._exec_proc_json` reads that
+result set (`_first_row` skips leading no-result statements); `LoaderMetrics`/`EnvAudit`
++`*_inserted`/`*_updated`; `record_page(result=…)`; `SqlLoader(run_id=…)`; `sweep_gl`/`sweep_ap`
+archive the full row (`_archive_row`) before delete, config-gated; `orchestrator` threads `run_id` +
+surfaces the split; `reference/sql/*.NEW.sql` (proc OUTPUT) + `migration_delete_archive.sql`;
+`config.example.yaml` archive keys.
+
+**Outcome:** 5 findings — **0 open correctness**; accepted/verified with rationale + gating tests.
+
+> **STATUS: ✅ CLOSED — 0 open correctness findings.** Suite **274 green** (5 new tests this pass).
+
+Severity: 🔴 Critical · 🟠 Major · 🟡 Minor
+
+| # | Sev | Finding | Disposition |
+|---|-----|---------|-------------|
+| CR-P1 | 🟠 | Proc change risk: does adding `OUTPUT $action` alter what rows the MERGE writes (parity)? | **VERIFIED SAFE** — the MERGE match/insert/update logic is byte-identical; `OUTPUT $action INTO @acts` + a trailing `SELECT` only ADD a counts result set. No data change → parity preserved. Confirmed live by a rolled-back insert+update pre-flight through the real loader. |
+| CR-P2 | 🟠 | Loader now fetches a result set after every proc call — could this break loads if the proc returns none (un-migrated) or the driver surfaces the DML first? | **HANDLED** — `_first_row` loops `fetchone`/`nextset` and swallows the "not a query" error → returns None → `record_page` flags `known=False` (same as the old silent-0, non-fatal). Covered by `test_rows_affected_unknown_when_proc_returns_no_counts`. |
+| CR-P3 | 🟠 | Archive `INSERT … SELECT *` depends on archive column order == base + (run_id, deleted_at); an IDENTITY column on the base would break the columnless INSERT. | **VERIFIED at apply** — migration builds the archive via `SELECT TOP 0 * INTO` (preserves order) then `ALTER ADD run_id, deleted_at`; apply step checks the base tables have no IDENTITY and the archive column count = base+2. |
+| CR-P4 | 🟡 | Archive table names aren't covered by `assert_test_sql_targets`, so a mis-typed prod name wouldn't be caught by that guard in test mode. | **ACCEPTED** — names are `safe_identifier`-validated, config ships `test_`-prefixed, and the `prod_write_guard` hook still hard-blocks prod writes. |
+| CR-P5 | 🟡 | Per-key archive INSERT + DELETE = 2N statements per sweep. | **ACCEPTED** — delete-detection sets are small (open-period; last sweep = 8) and `_guard_mass_delete` aborts anomalies before archiving. Same bounded-cost family as CR-O2/CR-M5. |
+
+**Injection/resource:** archive/counts SQL bind params + `safe_identifier` identifiers (no interpolation
+of data); cursors closed via `closing()`. **Data-neutral:** MERGE + sweep row-selection unchanged →
+parity (43 reconciliation/integration tests green). **Fallback:** if a proc ever lacks counts, the
+metric degrades to `known=False`, never a crash.
+
+**Verification:** `PYTHONPATH=src python -m pytest -q` → **274 passed**; live proc+loader contract
+verified via a rolled-back pre-flight during apply.

@@ -28,7 +28,11 @@ class LoaderMetrics:
     ap_pages: int = 0
     gl_rows_affected: int = 0
     ap_rows_affected: int = 0
-    gl_rows_affected_known: bool = True   # W8/OQ-15: False once a page's proc reports no rowcount (-1)
+    gl_inserted: int = 0                  # OQ-15: authoritative split from the MERGE $action
+    ap_inserted: int = 0
+    gl_updated: int = 0
+    ap_updated: int = 0
+    gl_rows_affected_known: bool = True   # W8/OQ-15: False if a page's proc returned no counts result set
     ap_rows_affected_known: bool = True
     gl_encode_s: float = 0.0
     ap_encode_s: float = 0.0
@@ -42,26 +46,31 @@ class LoaderMetrics:
     ap_deleted_keys: list = field(default_factory=list)
     sweep_s: float = 0.0
 
-    def record_page(self, kind: str, *, encode_s: float, db_s: float, affected: int) -> None:
+    def record_page(self, kind: str, *, encode_s: float, db_s: float,
+                    result: "tuple[int, int] | None") -> None:
         setattr(self, f"{kind}_pages", getattr(self, f"{kind}_pages") + 1)
         setattr(self, f"{kind}_encode_s", getattr(self, f"{kind}_encode_s") + encode_s)
         setattr(self, f"{kind}_db_s", getattr(self, f"{kind}_db_s") + db_s)
-        if affected < 0:
-            # The proc reported no rowcount (SET NOCOUNT / OPENJSON merge). Don't fake a 0 — flag it
-            # unknown so a genuinely-zero-change run stays distinguishable (W8 Item B / OQ-15).
+        if result is None:
+            # The proc returned no (inserted, updated) result set (old/un-migrated proc). Don't fake a
+            # 0 — flag it unknown so a genuinely-zero-change run stays distinguishable (W8 B / OQ-15).
             setattr(self, f"{kind}_rows_affected_known", False)
         else:
+            ins, upd = result
+            setattr(self, f"{kind}_inserted", getattr(self, f"{kind}_inserted") + ins)
+            setattr(self, f"{kind}_updated", getattr(self, f"{kind}_updated") + upd)
             setattr(self, f"{kind}_rows_affected",
-                    getattr(self, f"{kind}_rows_affected") + affected)
+                    getattr(self, f"{kind}_rows_affected") + ins + upd)
 
 
 class SqlLoader:
     def __init__(self, connection, sql_cfg: dict, *, source_env: str | None = None,
-                 require_test_targets: bool = True,
+                 require_test_targets: bool = True, run_id: str | None = None,
                  clock: Callable[[], float] = time.monotonic):
         self.conn = connection
         self.cfg = sql_cfg
         self.source_env = source_env      # multi-entity tag (specs/04 FR-LOAD-7, OQ-31)
+        self.run_id = run_id              # W8 A3: stamped on archived deleted rows
         self.clock = clock
         self.metrics = LoaderMetrics()
         if require_test_targets:
@@ -76,18 +85,57 @@ class SqlLoader:
         """Validated name of the entity discriminator column (default Source_Env)."""
         return safe_identifier(str(self.cfg.get("source_env_column", "Source_Env")))
 
-    def _exec_proc_json(self, proc_name: str, json_str: str) -> int:
-        """Execute the bulk proc with the page + @Source_Env bound as parameters. Returns the RAW
-        cursor.rowcount for the audit trail: a value <0 means the proc reported no count and is
-        preserved (NOT clamped to 0) so `record_page` can flag the metric unknown (W8 Item B/OQ-15).
+    def _archive_table(self, cfg_key: str) -> "str | None":
+        """Validated archive-table name when delete-archiving is enabled (W8 A3), else None."""
+        if not self.cfg.get("archive_deletes"):
+            return None
+        name = self.cfg.get(cfg_key)
+        return safe_identifier(str(name)) if name else None
+
+    def _archive_row(self, cur, arch: "str | None", src_table: str, where: str, key: tuple) -> None:
+        """Snapshot a soon-to-be-deleted row into the archive (full row + run_id + deleted_at) BEFORE
+        the DELETE, so every swept row is recoverable/inspectable. Entity-scoped. No-op if disabled.
+        Archive columns = src columns (same order) then run_id, deleted_at (see migration DDL)."""
+        if not arch:
+            return
+        se = self._source_env_col()
+        cur.execute(
+            f"INSERT INTO {arch} SELECT *, ?, SYSUTCDATETIME() FROM {src_table} "
+            f"WHERE {where} AND {se} = ?",
+            (self.run_id,) + key + (self.source_env,),
+        )
+
+    def _exec_proc_json(self, proc_name: str, json_str: str):
+        """Execute the bulk proc with the page + @Source_Env bound as parameters. The MERGE proc
+        OUTPUTs a one-row `(inserted, updated)` result set (OQ-15); returns that tuple. Returns None
+        when no result set is available (old/un-migrated proc) so `record_page` flags the metric
+        unknown rather than faking a 0 (W8 Item B).
 
         The page is single-env, so @Source_Env stamps the whole batch (specs/04 FR-LOAD-7)."""
         proc = safe_identifier(proc_name)
         with closing(self.conn.cursor()) as cur:
             # Bound parameters — JSON is NOT interpolated into the SQL text (no quote escaping).
             cur.execute(f"EXEC {proc} ?, ?", (json_str, self.source_env))
-            rc = getattr(cur, "rowcount", 0)
-            return int(rc) if rc is not None else -1
+            row = self._first_row(cur)
+            if row is None or len(row) < 2:
+                return None
+            return (int(row[0] or 0), int(row[1] or 0))
+
+    @staticmethod
+    def _first_row(cur):
+        """Return the first result-set row, skipping any leading no-result statements (DML before the
+        SELECT). Returns None if the proc produced no fetchable row. Never raises."""
+        while True:
+            try:
+                return cur.fetchone()
+            except Exception:
+                pass
+            nextset = getattr(cur, "nextset", None)
+            try:
+                if not nextset or not nextset():
+                    return None
+            except Exception:
+                return None
 
     def _load_records(self, proc_key: str, records: list[dict], page_size: int,
                       commit: bool, kind: str) -> int:
@@ -98,9 +146,9 @@ class SqlLoader:
             t0 = self.clock()
             payload = transform.encode_page(chunk)          # Transform step (specs/12)
             t1 = self.clock()
-            affected = self._exec_proc_json(proc, payload)  # Load step (specs/12)
+            result = self._exec_proc_json(proc, payload)    # Load step (specs/12) -> (inserted, updated)
             t2 = self.clock()
-            self.metrics.record_page(kind, encode_s=t1 - t0, db_s=t2 - t1, affected=affected)
+            self.metrics.record_page(kind, encode_s=t1 - t0, db_s=t2 - t1, result=result)
             loaded += len(chunk)
         if loaded and commit:
             self.conn.commit()
@@ -185,7 +233,9 @@ class SqlLoader:
             rows = cur.fetchall()
             missing = [tuple(r) for r in rows if tuple(str(x) for x in r) not in present_keys]
             self._guard_mass_delete("GL", len(missing), len(rows), max_delete_fraction)
+            arch = self._archive_table("gl_deleted_archive_table")
             for key in missing:
+                self._archive_row(cur, arch, gl, where, tuple(key))    # W8 A3: snapshot before delete
                 cur.execute(f"DELETE FROM {gl} WHERE {where} AND {se} = ?", tuple(key) + (self.source_env,))
         self.metrics.gl_deleted += len(missing)
         self.metrics.gl_deleted_keys.extend([str(x) for x in key] for key in missing)  # W8: JSON-safe keys
@@ -214,7 +264,9 @@ class SqlLoader:
             rows = cur.fetchall()
             missing = [tuple(r) for r in rows if tuple(str(x) for x in r) not in present_keys]
             self._guard_mass_delete("AP", len(missing), len(rows), max_delete_fraction)
+            arch = self._archive_table("ap_deleted_archive_table")
             for key in missing:
+                self._archive_row(cur, arch, ap, f"{col} = ?", tuple(key))    # W8 A3: snapshot before delete
                 cur.execute(f"DELETE FROM {ap} WHERE {col} = ? AND {se} = ?", tuple(key) + (self.source_env,))
         self.metrics.ap_deleted += len(missing)
         self.metrics.ap_deleted_keys.extend([str(x) for x in key] for key in missing)  # W8: JSON-safe keys

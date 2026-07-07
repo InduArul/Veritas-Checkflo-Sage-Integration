@@ -115,6 +115,15 @@ def test_env_audit_surfaces_deleted_keys():
     assert d["ap_deleted_keys"] == [["201"]]
 
 
+def test_env_audit_surfaces_insert_update_split():
+    # OQ-15: the authoritative inserted/updated split is part of the audit record.
+    e = audit.EnvAudit(name="E", gl_inserted=3, gl_updated=1, ap_inserted=2, ap_updated=0,
+                       gl_rows_affected=4, ap_rows_affected=2)
+    d = e.to_dict()
+    assert d["gl_inserted"] == 3 and d["gl_updated"] == 1
+    assert d["ap_inserted"] == 2 and d["ap_updated"] == 0
+
+
 def test_env_audit_zero_change_distinguishable_from_uncaptured():
     # W8 Item B2: a genuine zero-change run (known=True) must differ from an uncaptured one (known=False).
     genuine_zero = audit.EnvAudit(name="Z", gl_rows_affected=0, gl_rows_affected_known=True)

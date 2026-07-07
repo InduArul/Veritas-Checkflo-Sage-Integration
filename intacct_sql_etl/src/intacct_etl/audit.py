@@ -41,7 +41,11 @@ class EnvAudit:
     ap_loaded: int = 0
     gl_rows_affected: int = 0
     ap_rows_affected: int = 0
-    gl_rows_affected_known: bool = True   # W8/OQ-15: False = proc didn't report a count (not a real 0)
+    gl_inserted: int = 0                  # OQ-15: authoritative insert/update split (MERGE $action)
+    ap_inserted: int = 0
+    gl_updated: int = 0
+    ap_updated: int = 0
+    gl_rows_affected_known: bool = True   # W8/OQ-15: False = proc didn't report counts (not a real 0)
     ap_rows_affected_known: bool = True
     gl_pages: int = 0
     ap_pages: int = 0
