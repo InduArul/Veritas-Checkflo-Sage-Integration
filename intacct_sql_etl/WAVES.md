@@ -126,6 +126,11 @@ gates. Status is tracked in the wave-plan table above.
 - [ ] **W7 — Monthly full reload** — logic covered (derivation + slicing tested); needs live scale run.
 - [ ] **W8 — Hardening + cutover** — retries/backoff, `staging_swap` strategy, scheduling, SharePoint
       log option, live parity vs Make, runbook. **Blocked on creds/DBA (OQ-1, OQ-11, OQ-14).**
+   - [x] **W8·observability increment (2026-07-07)** — delete-sweep now records WHICH keys were removed
+         (audit JSON + `deletes_{run_id}.jsonl`); `rows_affected` no longer clamps the proc's `-1` to a
+         silent `0` (honest `*_rows_affected_known` flag). 9 new tests, **270 green**, review pass 4
+         CLOSED. Deferred: A3 archive tables (DBA), insert/update split (OQ-15). See
+         `docs/design/W8_observability_delete_audit.md`.
 
 > **Offline-tested:** all pure logic + full extract→transform→load→reconcile orchestration via injected
 > fakes/mocks, response parsers, connection-string assembly, run-log, CLI, and dry-run parity.

@@ -476,6 +476,11 @@ def _build_env_audit(name, entry, loader, *, extract_s, started_at, finished_at,
     ap_affected = getattr(loader.metrics, "ap_rows_affected", 0) if (loader and committed) else 0
     gl_deleted = getattr(loader.metrics, "gl_deleted", 0) if (loader and committed) else 0
     ap_deleted = getattr(loader.metrics, "ap_deleted", 0) if (loader and committed) else 0
+    # W8 observability: WHICH keys were swept + whether the rows_affected metric was captured.
+    gl_deleted_keys = list(getattr(loader.metrics, "gl_deleted_keys", [])) if (loader and committed) else []
+    ap_deleted_keys = list(getattr(loader.metrics, "ap_deleted_keys", [])) if (loader and committed) else []
+    gl_affected_known = getattr(loader.metrics, "gl_rows_affected_known", True) if (loader and committed) else True
+    ap_affected_known = getattr(loader.metrics, "ap_rows_affected_known", True) if (loader and committed) else True
     transform_s = (getattr(loader.metrics, "gl_encode_s", 0.0)
                    + getattr(loader.metrics, "ap_encode_s", 0.0)) if loader else 0.0
     load_s = (getattr(loader.metrics, "gl_db_s", 0.0)
@@ -489,8 +494,10 @@ def _build_env_audit(name, entry, loader, *, extract_s, started_at, finished_at,
         gl_loaded=entry["gl_loaded"] if committed else 0,
         ap_loaded=entry["ap_loaded"] if committed else 0,
         gl_rows_affected=gl_affected, ap_rows_affected=ap_affected,
+        gl_rows_affected_known=gl_affected_known, ap_rows_affected_known=ap_affected_known,
         gl_pages=gl_pages, ap_pages=ap_pages,
-        gl_deleted=gl_deleted, ap_deleted=ap_deleted, failed=failed,
+        gl_deleted=gl_deleted, ap_deleted=ap_deleted,
+        gl_deleted_keys=gl_deleted_keys, ap_deleted_keys=ap_deleted_keys, failed=failed,
         extract_s=extract_s, transform_s=transform_s, load_s=load_s,
         wipe_s=wipe_s, reconcile_s=reconcile_s, duration_s=duration_s,
         started_at=started_at.isoformat() if started_at else None,

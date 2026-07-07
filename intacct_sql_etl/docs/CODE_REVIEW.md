@@ -272,3 +272,36 @@ closed in `finally`. **Logging:** per-chunk warnings carry the chunk bounds. **D
 `dates.month_chunks` tiling the full-refresh path already uses.
 
 **Verification:** `PYTHONPATH=src python -m pytest -q` → **249 passed**.
+
+## Review pass 4 — W8 observability: delete-key audit + honest rows_affected
+
+**Date:** 2026-07-07. **Method:** manual adversarial review (logging / exception handling / resource
+mgmt / dead code / naming-DRY / injection) + full suite. **Trigger:** #12 soak review found two audit
+gaps — the delete-sweep records only a *count* (not which keys), and `rows_affected` is `0` in every
+run because `_exec_proc_json` clamped the proc's `-1` ("no rowcount") to `0`. **Scope:**
+`sql_loader.LoaderMetrics` (+`*_deleted_keys`, `*_rows_affected_known`), `record_page` (flag unknown
+instead of faking 0), `_exec_proc_json` (return raw rowcount), `sweep_gl`/`sweep_ap` (capture keys),
+`audit.EnvAudit` (+fields) + `audit.write_deletes_log` (new), `orchestrator._env_audit` (surface),
+`cli` (emit deletes log). Deferred (flagged): A3 archive tables (DBA), insert/update split (OQ-15).
+
+**Outcome:** 4 findings — **0 open correctness**; all accepted/verified with rationale + gating tests.
+
+> **STATUS: ✅ CLOSED — 0 open correctness findings.** Suite **270 green** (9 new W8 tests).
+
+Severity: 🔴 Critical · 🟠 Major · 🟡 Minor
+
+| # | Sev | Finding | Disposition |
+|---|-----|---------|-------------|
+| CR-O1 | 🟠 | Partial-page metric: a batch with some pages returning a real count and some returning `-1` — is the run mislabelled? | **VERIFIED CORRECT** — `record_page` only ever SETs `*_known=False`, never back to True, so any single uncaptured page makes the whole object `known=False` (conservative). Numeric stays an int (unknown pages add 0). Proven by `test_rowcount_unknown_not_clamped_to_zero` + `test_rowcount_real_change_counted_and_known`. |
+| CR-O2 | 🟡 | Deleted keys held in memory **and** written into the audit JSON — a very large sweep could bloat both. | **ACCEPTED** — delete-detection removes only rows gone from Intacct in **open** periods (inherently small; last soak sweep = 8), and `_guard_mass_delete` (`max_delete_fraction`) aborts an anomalous mass-delete **before** keys are captured. Same bounded-cost family as CR-M5. |
+| CR-O3 | 🟡 | `write_deletes_log` opens in append mode → a re-run could duplicate lines. | **ACCEPTED** — `run_id` is a per-invocation timestamp; an idempotent re-run gets a new `run_id`/file. File name is `deletes_{run_id}.jsonl`. |
+| CR-O4 | 🟡 | Deletes log defaults to the audit `dir` (`./audit`), not `logs/` as the design note first sketched. | **NO CHANGE** — co-located with the audit JSON it complements; overridable via `audit.deletes_dir`. Design note updated to match. |
+
+**Injection/resource:** no new SQL string-building — deleted keys come from already-bound DB reads and
+are written as JSON (no interpolation); `write_deletes_log` uses a `with` context and **never raises**
+(FR-AUD-7, guarded — regression-tested by `test_main_persists_audit_trail`). **Logging:** cli logs the
+deletes-log path. **DRY:** `write_deletes_log` mirrors `write_audit`; `record_page` unchanged for the
+happy path. **Data-neutral:** load/sweep SQL + committed rows are byte-identical → parity unaffected
+(43 reconciliation/integration tests green).
+
+**Verification:** `PYTHONPATH=src python -m pytest -q` → **270 passed**.

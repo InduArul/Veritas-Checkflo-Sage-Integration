@@ -41,10 +41,14 @@ class EnvAudit:
     ap_loaded: int = 0
     gl_rows_affected: int = 0
     ap_rows_affected: int = 0
+    gl_rows_affected_known: bool = True   # W8/OQ-15: False = proc didn't report a count (not a real 0)
+    ap_rows_affected_known: bool = True
     gl_pages: int = 0
     ap_pages: int = 0
     gl_deleted: int = 0                  # specs/13 delete-sweep counts
     ap_deleted: int = 0
+    gl_deleted_keys: list = field(default_factory=list)   # W8: WHICH keys were swept (auditability)
+    ap_deleted_keys: list = field(default_factory=list)
     failed: int = 0
     extract_s: float = 0.0
     transform_s: float = 0.0
@@ -151,4 +155,35 @@ def write_audit(run_audit: RunAudit, audit_cfg: dict, *, opener=open) -> Optiona
         return path
     except Exception as exc:                                # FR-AUD-7: never block the run
         log.error("failed to write audit trail: %s", exc)
+        return None
+
+
+def write_deletes_log(run_audit: RunAudit, audit_cfg: dict, *, opener=open) -> Optional[str]:
+    """W8 observability: a dedicated, greppable trail of WHICH keys the delete-sweep removed —
+    one JSON line per key `{run_id, env, object, key, at}`. Complements the count-only run log
+    (specs/07 FR-17) so a delete is identifiable/verifiable after the fact. Returns the path
+    written, or None when there were no deletes / audit disabled. Never raises (FR-AUD-7)."""
+    cfg = audit_cfg or {}
+    if not cfg.get("enabled", True):
+        return None
+    try:
+        rows = []
+        for e in getattr(run_audit, "environments", []):
+            for obj, keys in (("GL", getattr(e, "gl_deleted_keys", None)),
+                              ("AP", getattr(e, "ap_deleted_keys", None))):
+                for key in keys or []:
+                    rows.append({"run_id": run_audit.run_id, "env": e.name, "object": obj,
+                                 "key": key, "at": run_audit.finished_at})
+        if not rows:
+            return None
+        directory = cfg.get("deletes_dir", cfg.get("dir", "./audit"))
+        os.makedirs(directory, exist_ok=True)
+        name = cfg.get("deletes_file_pattern", "deletes_{run_id}.jsonl").format(run_id=run_audit.run_id)
+        path = os.path.join(directory, name)
+        with opener(path, "a", encoding="utf-8") as fh:
+            for r in rows:
+                fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+        return path
+    except Exception as exc:                                # FR-AUD-7: never block the run
+        log.error("failed to write deletes log: %s", exc)
         return None

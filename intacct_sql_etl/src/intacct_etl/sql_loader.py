@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 from . import transform
@@ -28,6 +28,8 @@ class LoaderMetrics:
     ap_pages: int = 0
     gl_rows_affected: int = 0
     ap_rows_affected: int = 0
+    gl_rows_affected_known: bool = True   # W8/OQ-15: False once a page's proc reports no rowcount (-1)
+    ap_rows_affected_known: bool = True
     gl_encode_s: float = 0.0
     ap_encode_s: float = 0.0
     gl_db_s: float = 0.0
@@ -36,14 +38,21 @@ class LoaderMetrics:
     reconcile_s: float = 0.0
     gl_deleted: int = 0                  # specs/13 delete-sweep counts
     ap_deleted: int = 0
+    gl_deleted_keys: list = field(default_factory=list)   # W8: WHICH keys were swept (auditability)
+    ap_deleted_keys: list = field(default_factory=list)
     sweep_s: float = 0.0
 
     def record_page(self, kind: str, *, encode_s: float, db_s: float, affected: int) -> None:
         setattr(self, f"{kind}_pages", getattr(self, f"{kind}_pages") + 1)
         setattr(self, f"{kind}_encode_s", getattr(self, f"{kind}_encode_s") + encode_s)
         setattr(self, f"{kind}_db_s", getattr(self, f"{kind}_db_s") + db_s)
-        setattr(self, f"{kind}_rows_affected",
-                getattr(self, f"{kind}_rows_affected") + affected)
+        if affected < 0:
+            # The proc reported no rowcount (SET NOCOUNT / OPENJSON merge). Don't fake a 0 — flag it
+            # unknown so a genuinely-zero-change run stays distinguishable (W8 Item B / OQ-15).
+            setattr(self, f"{kind}_rows_affected_known", False)
+        else:
+            setattr(self, f"{kind}_rows_affected",
+                    getattr(self, f"{kind}_rows_affected") + affected)
 
 
 class SqlLoader:
@@ -68,15 +77,17 @@ class SqlLoader:
         return safe_identifier(str(self.cfg.get("source_env_column", "Source_Env")))
 
     def _exec_proc_json(self, proc_name: str, json_str: str) -> int:
-        """Execute the bulk proc with the page + @Source_Env bound as parameters. Returns rows
-        affected (cursor.rowcount; <0 means the proc reported none) for the audit trail.
+        """Execute the bulk proc with the page + @Source_Env bound as parameters. Returns the RAW
+        cursor.rowcount for the audit trail: a value <0 means the proc reported no count and is
+        preserved (NOT clamped to 0) so `record_page` can flag the metric unknown (W8 Item B/OQ-15).
 
         The page is single-env, so @Source_Env stamps the whole batch (specs/04 FR-LOAD-7)."""
         proc = safe_identifier(proc_name)
         with closing(self.conn.cursor()) as cur:
             # Bound parameters — JSON is NOT interpolated into the SQL text (no quote escaping).
             cur.execute(f"EXEC {proc} ?, ?", (json_str, self.source_env))
-            return max(0, getattr(cur, "rowcount", 0) or 0)
+            rc = getattr(cur, "rowcount", 0)
+            return int(rc) if rc is not None else -1
 
     def _load_records(self, proc_key: str, records: list[dict], page_size: int,
                       commit: bool, kind: str) -> int:
@@ -177,6 +188,7 @@ class SqlLoader:
             for key in missing:
                 cur.execute(f"DELETE FROM {gl} WHERE {where} AND {se} = ?", tuple(key) + (self.source_env,))
         self.metrics.gl_deleted += len(missing)
+        self.metrics.gl_deleted_keys.extend([str(x) for x in key] for key in missing)  # W8: JSON-safe keys
         self.metrics.sweep_s += self.clock() - t0
         if commit:
             self.conn.commit()
@@ -205,6 +217,7 @@ class SqlLoader:
             for key in missing:
                 cur.execute(f"DELETE FROM {ap} WHERE {col} = ? AND {se} = ?", tuple(key) + (self.source_env,))
         self.metrics.ap_deleted += len(missing)
+        self.metrics.ap_deleted_keys.extend([str(x) for x in key] for key in missing)  # W8: JSON-safe keys
         self.metrics.sweep_s += self.clock() - t0
         if commit:
             self.conn.commit()

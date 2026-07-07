@@ -57,6 +57,47 @@ Two auditability gaps surfaced when reviewing the overnight sweep + evening upse
 - Zero open code-review findings (`CLAUDE.md` #8) with the gating tests above CLOSED before **S**.
 - OQ-15 updated (split delivered or documented proc-limited); `specs/12` FR-AUD-5 satisfied.
 
+## Architecture (A-step — concrete touchpoints)
+
+Verified against the current code:
+
+**Item A — deleted keys (BUILD NOW, pure Python, no new tables):**
+- `sql_loader.py` `sweep_gl`/`sweep_ap` already compute `missing` (the exact deleted key tuples) and
+  keep only `len(missing)`. Add to `LoaderMetrics`: `gl_deleted_keys: list = []`, `ap_deleted_keys:
+  list = []`; append each `missing` key (as a list, JSON-safe) alongside the existing count.
+- `audit.py` `EnvAudit`: add `gl_deleted_keys`/`ap_deleted_keys` (default `[]`); surfaced by `to_dict()`.
+- `orchestrator.py`: copy `loader.metrics.*_deleted_keys` → `EnvAudit` (same place it copies `*_deleted`).
+- New deletes log: on any sweep delete, append one JSON line per key to `deletes_{run_id}.jsonl`
+  (`{run_id, env, object, key, at}`) in the audit `dir` (override via `audit.deletes_dir`), via the
+  audit sink pattern — never blocks the run (FR-AUD-7). Written from `cli` after the audit trail.
+
+**Item B — honest rows_affected (BUILD NOW, pure Python):**
+- `sql_loader.py:79` `_exec_proc_json` currently does `max(0, rowcount or 0)` → clamps the proc's `-1`
+  ("no rowcount") to `0`. Change: return the RAW rowcount; `record_page` treats `affected < 0` as
+  **unknown** — adds 0 to the count but sets `{kind}_rows_affected_known = False`.
+- `LoaderMetrics` + `EnvAudit`: add `gl_rows_affected_known`/`ap_rows_affected_known` (default `True`).
+  Audit then shows `rows_affected: 0, rows_affected_known: false` on an uncaptured run vs
+  `rows_affected: N, rows_affected_known: true` — satisfies FR-OBS-B2. Numeric fields stay `int` (0 when
+  unknown) so all existing sums (`total_affected`, `totals()`) remain int-safe → **no parity impact**.
+
+**DEFERRED (need DBA/proc work — flagged, NOT built this slice):**
+- **A3 archive tables** `test_GL_deleted_archive`/`test_AP_deleted_archive` — require DBA to provision
+  `test_` tables (a W0-style dependency). Deferred to a follow-up; A1+A2 already make deletes fully
+  traceable (keys logged + in audit), so this wave is shippable without it.
+- **B insert-vs-update split** (`inserted`/`updated`) — requires the bulk proc to OUTPUT counts; procs
+  are black boxes (`CLAUDE.md` #4). Stays **OQ-15**. This slice fixes the *dead metric*; the split is a
+  separate proc-support item. `split_available: false` is reported honestly until then.
+
+## Tests-first matrix (RED before code)
+| Test | File | Asserts (fails today) |
+|---|---|---|
+| `test_sweep_gl_records_deleted_keys` | `tests/unit/test_sql_loader_sweep.py` | `metrics.gl_deleted_keys == missing`; count unchanged |
+| `test_sweep_source_env_scoped_keys` | same | env A delete doesn't capture env B's shared `Record_No` |
+| `test_deleted_keys_flow_into_audit` | `tests/unit/test_audit.py` | `EnvAudit.to_dict()['gl_deleted_keys']` present |
+| `test_rowcount_unknown_not_clamped_to_zero` | `tests/unit/test_sql_loader.py` | proc rowcount `-1` → `rows_affected_known False` (today: silently 0/True) |
+| `test_rowcount_real_change_counted` | same | rowcount `N` → `rows_affected == N`, `known True` |
+| `test_zero_change_distinguishable_from_unknown` | `tests/unit/test_audit.py` | genuine 0 (`known True`) ≠ uncaptured 0 (`known False`) |
+
 ## Out of scope
 Alerting on false-deletes (that's OQ-9 / #8 SMTP wiring). This note only makes deletes + load-counts
-**observable**; acting on them is separate.
+**observable**; acting on them is separate. Archive tables + insert/update split are deferred (above).

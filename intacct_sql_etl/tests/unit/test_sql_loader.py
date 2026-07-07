@@ -119,6 +119,52 @@ def test_loader_captures_metrics():
     assert m.gl_encode_s == 3.0 and m.gl_db_s == 3.0      # 1.0s each per page (fake clock)
 
 
+# ---- W8 observability Item B: honest rows_affected (don't hide the proc's "-1 = no count") ----
+
+class _RowcountCursor:
+    def __init__(self, rowcount):
+        self.calls = []
+        self.closed = False
+        self.rowcount = rowcount
+
+    def execute(self, sql, params=None):
+        self.calls.append((sql, params))
+
+    def close(self):
+        self.closed = True
+
+
+class _RowcountConn:
+    def __init__(self, rowcount):
+        self.cur = _RowcountCursor(rowcount)
+        self.commits = 0
+
+    def cursor(self):
+        return self.cur
+
+    def commit(self):
+        self.commits += 1
+
+    def rollback(self):
+        pass
+
+
+def test_rowcount_unknown_not_clamped_to_zero():
+    # The bulk proc returns -1 when it reports no rowcount. Today max(0,...) hides that as a silent 0.
+    # W8: a run where the count is UNCAPTURED must be distinguishable from a genuine zero-change run.
+    loader = sql_loader.SqlLoader(_RowcountConn(-1), TEST_SQL_CFG)
+    loader.load_gl_records(_records(2), page_size=10)
+    assert loader.metrics.gl_rows_affected_known is False     # metric was not captured
+    assert loader.metrics.gl_rows_affected == 0               # numeric stays int-safe
+
+
+def test_rowcount_real_change_counted_and_known():
+    loader = sql_loader.SqlLoader(_RowcountConn(4), TEST_SQL_CFG)
+    loader.load_gl_records(_records(2), page_size=10)         # 1 page, rowcount 4
+    assert loader.metrics.gl_rows_affected == 4
+    assert loader.metrics.gl_rows_affected_known is True
+
+
 def test_wipe_and_reconcile_timed():
     conn = FakeConnection()
     loader = sql_loader.SqlLoader(conn, TEST_SQL_CFG, clock=_counter())

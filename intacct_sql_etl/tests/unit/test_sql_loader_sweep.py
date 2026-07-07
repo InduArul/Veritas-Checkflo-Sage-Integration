@@ -188,6 +188,29 @@ def test_gl_sweep_2027_never_touches_out_of_window_history():
     assert n == 1
 
 
+# ---- W8 observability: capture WHICH keys were deleted, not just the count ----
+
+def test_sweep_gl_records_deleted_keys():
+    # W8 Item A1: the deleted GL keys must be captured (auditability), not just len().
+    ld = _loader([("100", "1"), ("101", "1"), ("102", "2")])
+    ld.sweep_gl({("100", "1"), ("102", "2")}, S, E)          # 101/1 is the deletion
+    assert ld.metrics.gl_deleted == 1
+    assert ld.metrics.gl_deleted_keys == [["101", "1"]]      # JSON-safe list of key parts
+
+
+def test_sweep_ap_records_deleted_keys():
+    ld = _loader([("200",), ("201",)])
+    ld.sweep_ap({("200",)}, S, E, date_field="When_Posted")  # 201 is the deletion
+    assert ld.metrics.ap_deleted == 1
+    assert ld.metrics.ap_deleted_keys == [["201"]]
+
+
+def test_sweep_no_delete_captures_no_keys():
+    ld = _loader([("100", "1")])
+    ld.sweep_gl({("100", "1")}, S, E)
+    assert ld.metrics.gl_deleted_keys == []                  # empty, not None
+
+
 def test_ap_sweep_2027_never_touches_out_of_window_history():
     conn = _DatedConn(ap=[
         (("2024B",), date(2024, 9, 1)),                   # out of window (must survive)

@@ -124,6 +124,10 @@ def main(argv=None, *, load_config=cfgmod.load_config, runner=orchestrator.run,
         path = persist_audit(run_audit, cfg.get("audit", {}))
         if path:
             log.info("audit trail written: %s", path)
+        # W8 observability: greppable per-key deletes trail (only when a sweep removed rows)
+        dpath = audit.write_deletes_log(run_audit, cfg.get("audit", {}))
+        if dpath:
+            log.info("deletes log written: %s", dpath)
 
     # specs/14 Part B: email the daily report / failure alert (best-effort; never changes exit code).
     if notifier:

@@ -102,3 +102,50 @@ def test_env_audit_surfaces_delete_counts():
     ra = audit.RunAudit(run_id="r", run_type="daily", window_start="a", window_end="b",
                         environments=[e])
     assert ra.totals()["deleted"] == 4
+
+
+# ---- W8 observability: deleted KEYS + honest rows_affected surfaced in the audit ----
+
+def test_env_audit_surfaces_deleted_keys():
+    # W8 Item A2: which rows were deleted (not just how many) is in the audit record.
+    e = audit.EnvAudit(name="E", gl_deleted=1, gl_deleted_keys=[["101", "1"]],
+                       ap_deleted=1, ap_deleted_keys=[["201"]])
+    d = e.to_dict()
+    assert d["gl_deleted_keys"] == [["101", "1"]]
+    assert d["ap_deleted_keys"] == [["201"]]
+
+
+def test_env_audit_zero_change_distinguishable_from_uncaptured():
+    # W8 Item B2: a genuine zero-change run (known=True) must differ from an uncaptured one (known=False).
+    genuine_zero = audit.EnvAudit(name="Z", gl_rows_affected=0, gl_rows_affected_known=True)
+    uncaptured = audit.EnvAudit(name="U", gl_rows_affected=0, gl_rows_affected_known=False)
+    assert genuine_zero.to_dict()["gl_rows_affected_known"] is True
+    assert uncaptured.to_dict()["gl_rows_affected_known"] is False
+
+
+def test_write_deletes_log_one_line_per_key(tmp_path):
+    # W8 Item A2: a dedicated, greppable deletes trail — one JSON line per deleted key.
+    ra = audit.RunAudit(run_id="20260707_010002", run_type="daily",
+                        window_start="2026-04-01", window_end="2026-07-31",
+                        finished_at="2026-07-07T01:51:06")
+    ra.environments.append(audit.EnvAudit(name="Evergreen", gl_deleted=2,
+                                          gl_deleted_keys=[["101", "1"], ["102", "2"]]))
+    ra.environments.append(audit.EnvAudit(name="Veritashs", ap_deleted=1,
+                                          ap_deleted_keys=[["201"]]))
+    cfg = {"enabled": True, "dir": str(tmp_path)}
+    path = audit.write_deletes_log(ra, cfg)
+    import json
+    lines = [json.loads(ln) for ln in open(path, encoding="utf-8").read().splitlines() if ln.strip()]
+    assert len(lines) == 3                                    # 2 GL + 1 AP keys
+    gl = [x for x in lines if x["object"] == "GL"]
+    assert {"run_id", "env", "object", "key", "at"} <= set(gl[0])
+    assert gl[0]["run_id"] == "20260707_010002"
+    assert ["101", "1"] in [x["key"] for x in gl]
+
+
+def test_write_deletes_log_no_keys_writes_nothing(tmp_path):
+    ra = audit.RunAudit(run_id="r", run_type="daily", window_start="a", window_end="b")
+    ra.environments.append(audit.EnvAudit(name="E"))          # no deletes
+    cfg = {"enabled": True, "dir": str(tmp_path)}
+    assert audit.write_deletes_log(ra, cfg) is None
+    assert list(tmp_path.iterdir()) == []
