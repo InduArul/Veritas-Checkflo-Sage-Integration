@@ -61,7 +61,9 @@ Runs on **every** scheduled invocation (daily intraday runs, the nightly run, an
 
 Removes SQL rows that were **deleted in Intacct**. `WHENMODIFIED` deltas can never see deletions (deleted rows stop appearing), so this is required for correctness.
 
-**Period rule (client-confirmed 2026-07-02, OQ-20) — the fact that makes windowed sweeping provably safe:** hard deletes happen **only in OPEN (recent) accounting periods**. In a **CLOSED** period, GL/AP are **never hard-deleted — only reversed**, and a reversal is a *new* row (own `WHENMODIFIED`) that the delta **upsert** already captures. Therefore the delete-sweep only needs to span the **currently-open period(s)** — a recent window, never all history — and old/closed data is **never** hard-deleted, so windowed sweep + accumulate (§13.9) can never wrongly drop history. (Watch-item: the sweep window must always cover every open period; the daily ~4-month / monthly wide windows do, unless a period stays open > ~3–4 months.)
+**Period rule (client-confirmed 2026-07-02, OQ-20) — the fact that makes windowed sweeping provably safe:** hard deletes happen **only in OPEN (recent) accounting periods**. In a **CLOSED** period, GL/AP are **never hard-deleted — only reversed**, and a reversal is a *new* row (own `WHENMODIFIED`) that the delta **upsert** already captures. Therefore the delete-sweep only needs to span the **currently-open period(s)** — a recent window, never all history — and old/closed data is **never** hard-deleted, so windowed sweep + accumulate (§13.9) can never wrongly drop history. (Watch-item: the sweep window must always cover every open period; the daily window must do so, unless a period stays open longer than it spans.)
+
+**Nightly window narrowed 4→3 months (2026-07-14):** `daily_lookback_months` 3→2 (current + 2 prior). Evidence: across every nightly sweep 07-08…07-14, deletions landed only in current + 1 prior (a thin tail in month-2); **month-3 (April) had 0 deletions on every night**, while the full 4-month sweep was reaching the 3600s wall-clock cap (reaped 07-14). Open question to client (pending): how many periods stay open at once / max open span / can a closed period reopen — the answer confirms 3 months is always safe. Mitigation until answered: a wider weekly backstop sweep is the intended fast-follow.
 
 1. Pull **keys only** from Intacct for the sweep window — `RECORDNO` (+ `LINE_NO` for GL) — one/two fields, large page size ⇒ cheap.
 2. Compare to the SQL keys **within the same window**.
@@ -98,7 +100,7 @@ Both run types use **identical** upsert logic (§13.4). They differ **only** in 
 | Run | Trigger | Upsert (delta) | Delete-sweep | Scope |
 |---|---|---|---|---|
 | **Daily intraday** | 08:00, 17:30 | ✅ | ❌ (skipped) | — |
-| **Nightly** | 01:00 | ✅ | ✅ | **~4-month** window (`daily_lookback_months`) |
+| **Nightly** | 01:00 | ✅ | ✅ | **3-month** window (`daily_lookback_months: 2`; narrowed from 4 on 07-14) |
 | **Monthly** | 1st of month | ✅ | ✅ (**wide**) | **Jan-1-last-year → month-end** (deep reconcile) |
 
 - **Delete-sweep runs once per night** regardless of how many intraday upserts occurred (user decision 2026-07-02). The nightly job is **delete-sweep + upsert** together (user decision).

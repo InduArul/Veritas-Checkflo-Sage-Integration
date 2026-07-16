@@ -10,7 +10,11 @@ run:
   timezone: "America/Los_Angeles"      # OQ-8 confirm
   run_type_override: auto              # auto | daily | monthly  (auto = derive from run date)
   window_override: null               # or {start: "01/01/2025", end: "01/31/2025"} for backfill
-  daily_lookback_months: 3            # daily window start = 1st of (N months ago)
+  daily_lookback_months: 2            # daily window start = 1st of (N months ago) => N+1 calendar
+                                      #   months swept (2 => current + 2 prior = 3 months). Must always
+                                      #   cover every OPEN accounting period (specs/13 §13.5); reduced
+                                      #   3->2 on 2026-07-14 (April had 0 deletes; sweep was reaping the
+                                      #   3600s cap). Widen if periods can stay open >3 months.
   monthly_start_rule: jan1_last_year  # monthly window start
   chunk: calendar_month               # slice the window into calendar-month chunks
   chunk_months: 1                     # specs/13 §13.16: delta upsert+sweep process this many calendar
@@ -84,6 +88,10 @@ sql:
   #                                       # (never a destructive full-table compare). Needs DBA to add
   #                                       # the column + have test_AddAPBillBulk populate it (OQ-26).
   sweep_max_delete_fraction: 0.5      # abort a sweep that would delete > this fraction of scanned rows
+  # Reconnect-and-retry a whole environment on a transient/dropped DB connection (TCP 10060 /
+  # '08S01' comm-link). Env body is idempotent (Source_Env-scoped wipe) so a redo can't duplicate.
+  # count: 0 disables. Only connection-class errors retry; data/logic/Sage errors fail fast.
+  connection_retry: {count: 3, interval_s: 120}
   # W8 A3: archive each swept row (full row + run_id + deleted_at) BEFORE deleting it — recoverable
   # audit trail of delete-detection. Requires reference/sql/migration_delete_archive.sql applied.
   archive_deletes: false              # true to enable (test_ only)

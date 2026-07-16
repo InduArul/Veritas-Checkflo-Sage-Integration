@@ -70,6 +70,54 @@ def _new_entry() -> dict:
     }
 
 
+# --- SQL connection-retry (reconnect-and-retry a whole env on a dropped DB connection) --------
+# A transient DB connection failure (TCP 10060 / '08S01' communication-link failure) otherwise
+# kills a whole environment's run with no retry (seen in the 2026-07-15 cutover seed). The env body
+# is idempotent (Source_Env-scoped wipe + reload), so on a connection-CLASS failure we reconnect and
+# redo the env. Data/logic errors (constraint/parse/Sage-auth) must NOT retry — they fail fast.
+_CONN_ERROR_SIGNATURES = (
+    "08S01", "08001", "08003", "08004", "08007", "HYT00", "HYT01",
+    "Communication link failure", "TCP Provider", "Named Pipes Provider",
+    "server was not found", "Connection is busy", "10060", "10054",
+)
+
+
+def _is_connection_error(entry: dict) -> bool:
+    """True if the env's recorded failure looks like a dropped/failed DB connection (retryable)."""
+    for key in ("error", "rollback_error"):
+        msg = entry.get(key)
+        if msg and any(sig in msg for sig in _CONN_ERROR_SIGNATURES):
+            return True
+    return False
+
+
+def _connection_retry_cfg(cfg: dict) -> tuple[int, float]:
+    """(count, interval_s) for SQL connection-retry from `sql.connection_retry` (default: off, 120s)."""
+    r = (cfg.get("sql", {}) or {}).get("connection_retry", {}) or {}
+    return int(r.get("count", 0)), float(r.get("interval_s", 120))
+
+
+def _process_env_with_retry(fn, *, retry_count, retry_interval, sleep, name, run_log=None):
+    """Run one environment via `fn()` (returns (entry, env_audit)), reconnecting and re-running on a
+    connection-class DB failure up to `retry_count` times, `retry_interval`s apart.
+
+    `fn` must be idempotent (Source_Env-scoped wipe + reload) so a redo cannot duplicate rows. A
+    non-connection error (data/logic/Sage) returns immediately — only dropped connections retry.
+    """
+    entry, env_audit = fn()
+    attempt = 0
+    while _is_connection_error(entry) and attempt < retry_count:
+        attempt += 1
+        log.warning("%s: DB connection failure (attempt %d/%d) — reconnecting in %ds: %s",
+                    name, attempt, retry_count, int(retry_interval), entry.get("error"))
+        if run_log:
+            run_log.add(f'"{name}" DB connection lost — retry {attempt}/{retry_count} '
+                        f'in {int(retry_interval)}s')
+        sleep(retry_interval)
+        entry, env_audit = fn()
+    return entry, env_audit
+
+
 def _parse_mdy(s: str) -> date:
     return datetime.strptime(s, "%m/%d/%Y").date()
 
@@ -552,12 +600,13 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
         run_log.add("Start of process")
         run_log.add(f"Run type: {run_type}; window: {start} .. {end}")
 
+    rc_count, rc_interval = _connection_retry_cfg(cfg)
     for env in cfg.get("environments", []):
         if not env.get("enabled", True):
             continue
         if delta:
-            entry, env_audit = _process_environment_delta(
-                env, do_upsert=mode in ("upsert", "sweep-upsert"),
+            attempt_fn = lambda e=env: _process_environment_delta(
+                e, do_upsert=mode in ("upsert", "sweep-upsert"),
                 do_sweep=mode in ("sweep", "sweep-upsert"),
                 cfg=cfg, secrets=secrets, start=start, end=end, cutoff=cutoff, grace=grace,
                 page_size=page_size, require_test=require_test, strategy=strategy,
@@ -567,13 +616,18 @@ def run(cfg: dict, secrets, *, today: date, sage_client_factory, connect,
                 commit_chunks=commit_chunks, run_id=run_audit.run_id,
             )
         else:
-            entry, env_audit = _process_environment(
-                env, cfg=cfg, secrets=secrets, start=start, end=end, chunks=chunks,
+            attempt_fn = lambda e=env: _process_environment(
+                e, cfg=cfg, secrets=secrets, start=start, end=end, chunks=chunks,
                 granularity=granularity, page_size=page_size, require_test=require_test,
                 strategy=strategy, gl_opts=gl_opts, ap_opts=ap_opts, connect=connect,
                 sage_client_factory=sage_client_factory, settle_s=settle_s, sleep=sleep,
                 run_log=run_log, clock=clock, now=now, run_id=run_audit.run_id,
             )
+        # Reconnect-and-retry the whole env on a transient connection-class DB failure (idempotent
+        # via Source_Env-scoped wipe). No-op when sql.connection_retry.count == 0.
+        entry, env_audit = _process_env_with_retry(
+            attempt_fn, retry_count=rc_count, retry_interval=rc_interval,
+            sleep=sleep, name=env["name"], run_log=run_log)
         result.environments[env["name"]] = entry
         run_audit.environments.append(env_audit)
 
