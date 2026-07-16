@@ -92,15 +92,35 @@ class SqlLoader:
         name = self.cfg.get(cfg_key)
         return safe_identifier(str(name)) if name else None
 
+    def _ordered_columns(self, cur, table: str) -> "list[str]":
+        """Physical column names of `table`, in ordinal order (cached per run). Used to build a
+        column-EXPLICIT archive insert so source→archive alignment is by NAME, not position."""
+        cache = self.__dict__.setdefault("_col_cache", {})
+        if table not in cache:
+            cur.execute(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_NAME = ? ORDER BY ORDINAL_POSITION",
+                (table,),
+            )
+            cache[table] = [safe_identifier(r[0]) for r in cur.fetchall()]
+        return cache[table]
+
     def _archive_row(self, cur, arch: "str | None", src_table: str, where: str, key: tuple) -> None:
         """Snapshot a soon-to-be-deleted row into the archive (full row + run_id + deleted_at) BEFORE
         the DELETE, so every swept row is recoverable/inspectable. Entity-scoped. No-op if disabled.
-        Archive columns = src columns (same order) then run_id, deleted_at (see migration DDL)."""
+
+        Columns are named EXPLICITLY (aligned by name), never `SELECT *`: a positional insert silently
+        breaks if the archive table's column order differs from the source's — the root cause of the
+        2026-07-16 AP_deleted_archive 22007 (Source_Env string landing in the When_Posted DATE column).
+        The archive must expose every source column by the same name, then run_id, deleted_at."""
         if not arch:
             return
         se = self._source_env_col()
+        cols = self._ordered_columns(cur, src_table)
+        collist = ", ".join(cols)
         cur.execute(
-            f"INSERT INTO {arch} SELECT *, ?, SYSUTCDATETIME() FROM {src_table} "
+            f"INSERT INTO {arch} ({collist}, run_id, deleted_at) "
+            f"SELECT {collist}, ?, SYSUTCDATETIME() FROM {src_table} "
             f"WHERE {where} AND {se} = ?",
             (self.run_id,) + key + (self.source_env,),
         )

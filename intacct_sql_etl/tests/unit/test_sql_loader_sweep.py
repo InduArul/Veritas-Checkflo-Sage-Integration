@@ -11,25 +11,39 @@ import pytest
 from intacct_etl import sql_loader
 
 
+# Representative physical column orders (archive-table order is DELIBERATELY different from these
+# in test_archive_insert_is_column_explicit_* to reproduce the 2026-07-16 prod incident).
+DEFAULT_COLUMNS = {
+    "test_GLTable": ["Location_ID", "Record_No", "Line_No", "Entry_Date", "Source_Env"],
+    "test_APBillTable": ["Location_ID", "Record_No", "Source_Env", "When_Posted"],
+}
+
+
 class FakeCursor:
-    def __init__(self, rows):
+    def __init__(self, rows, columns=None):
         self.calls = []
         self._rows = rows
+        self._columns = columns or {}       # {table: [col, ...]} for INFORMATION_SCHEMA lookups
+        self._last = rows
 
     def execute(self, sql, params=None):
         self.calls.append((sql, params))
+        if "INFORMATION_SCHEMA.COLUMNS" in sql.upper():
+            self._last = [(c,) for c in self._columns.get(params[0], [])]
+        else:
+            self._last = self._rows
         return self
 
     def fetchall(self):
-        return self._rows
+        return self._last
 
     def close(self):
         pass
 
 
 class FakeConnection:
-    def __init__(self, rows):
-        self.cur = FakeCursor(rows)
+    def __init__(self, rows, columns=None):
+        self.cur = FakeCursor(rows, columns if columns is not None else DEFAULT_COLUMNS)
         self.commits = 0
         self.rollbacks = 0
 
@@ -237,6 +251,22 @@ def test_sweep_ap_archives_row_before_delete():
     calls = ld.conn.cur.calls
     ins = [c for c in calls if "INSERT" in c[0].upper() and "test_AP_deleted_archive" in c[0]]
     assert len(ins) == 1 and ins[0][1] == ("RID2", "201", ENV)
+
+
+def test_archive_insert_is_column_explicit_not_select_star():
+    """Regression for the 2026-07-16 prod incident: prod AP_deleted_archive had Source_Env/When_Posted
+    in the OPPOSITE order to APBillTable, so a positional `INSERT ... SELECT *, run_id, deleted_at`
+    shoved the Source_Env string into the archive's When_Posted DATE column -> 22007. The archive insert
+    must name source columns EXPLICITLY (alignment by NAME, order-independent), never `SELECT *`."""
+    conn = FakeConnection([("200",), ("201",)])                  # 201 is the deletion
+    ld = sql_loader.SqlLoader(conn, CFG_ARCH, source_env=ENV, run_id="RID")
+    ld.sweep_ap({("200",)}, S, E, date_field="When_Posted")
+    ins = [c[0] for c in conn.cur.calls if "INSERT INTO test_AP_deleted_archive" in c[0]][0]
+    assert "SELECT*" not in ins.upper().replace(" ", "")         # NOT positional
+    up = ins.upper()
+    for col in DEFAULT_COLUMNS["test_APBillTable"]:               # every source column named explicitly
+        assert col.upper() in up
+    assert "RUN_ID" in up and "DELETED_AT" in up                 # audit columns appended by name
 
 
 def test_sweep_does_not_archive_when_disabled():
