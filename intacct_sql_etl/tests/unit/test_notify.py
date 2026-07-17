@@ -54,6 +54,24 @@ def test_config_recipient_source():
     assert notify.ConfigRecipientSource(["a@x.com", "b@x.com"]).list() == ["a@x.com", "b@x.com"]
 
 
+def test_file_recipient_source_reads_and_ignores_blanks_and_comments(tmp_path):
+    p = tmp_path / "recips.txt"
+    p.write_text("# alert recipients (edit this file to change who is paged)\n\n"
+                 "a@x.com\n   b@x.com   \n# c@x.com  (temporarily disabled)\n", encoding="utf-8")
+    assert notify.FileRecipientSource(str(p)).list() == ["a@x.com", "b@x.com"]
+
+
+def test_from_config_file_recipient_source_is_people_independent(tmp_path):
+    p = tmp_path / "r.txt"
+    p.write_text("a@x.com\nb@x.com\n", encoding="utf-8")
+    n = notify.from_config({"enabled": True, "from_address": "f@x.com", "transport": "graph",
+                            "recipient_source": "file", "recipients_file": str(p), "graph": {}},
+                           secrets={})
+    assert sorted(n.recipient_source.list()) == ["a@x.com", "b@x.com"]
+    p.write_text("only@x.com\n", encoding="utf-8")          # edit the file -> no code/config change
+    assert n.recipient_source.list() == ["only@x.com"]
+
+
 def test_caching_source_saves_on_success_then_falls_back_to_cache_then_admin():
     store = {}
 
@@ -124,6 +142,72 @@ def test_graph_transport_send_is_best_effort_not_a_crash():
     n = notify.from_config({"enabled": True, "from_address": "f@x.com", "transport": "graph",
                             "recipients": ["a@x.com"]}, secrets={})
     n.notify(Result(ok=True, audit=_audit(True)))      # send may be unimplemented — must be swallowed
+
+
+# ---- Graph sendMail transport (#8) ----
+class FakeResp:
+    def __init__(self, json_data=None, status=200):
+        self._json = json_data or {}
+        self.status_code = status
+
+    def json(self):
+        return self._json
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+def test_graph_transport_send_posts_sendmail_with_client_credentials_token():
+    calls = []
+
+    def fake_post(url, **kw):
+        calls.append((url, kw))
+        if url.endswith("/oauth2/v2.0/token"):
+            return FakeResp({"access_token": "TOK123"})
+        return FakeResp({}, status=202)
+
+    tr = notify.GraphTransport(from_address="ikannan@x.com",
+                               secrets={"GRAPH_CLIENT_SECRET": "shh"},
+                               client_id="cid", tenant_id="tid",
+                               client_secret_key="GRAPH_CLIENT_SECRET", http_post=fake_post)
+    tr.send("ikannan@x.com", ["a@x.com", "b@x.com"], "subj", "body")
+
+    token_url, token_kw = calls[0]
+    assert token_url.endswith("/tid/oauth2/v2.0/token")
+    assert token_kw["data"]["grant_type"] == "client_credentials"
+    assert token_kw["data"]["client_secret"] == "shh"                     # resolved from secret store
+    assert token_kw["data"]["scope"] == "https://graph.microsoft.com/.default"
+
+    send_url, send_kw = calls[1]
+    assert send_url.endswith("/users/ikannan@x.com/sendMail")             # send-as the sender mailbox
+    assert send_kw["headers"]["Authorization"] == "Bearer TOK123"
+    addrs = [r["emailAddress"]["address"] for r in send_kw["json"]["message"]["toRecipients"]]
+    assert addrs == ["a@x.com", "b@x.com"]
+    assert send_kw["json"]["message"]["subject"] == "subj"
+
+
+def test_graph_transport_raises_on_http_error_but_notifier_swallows_it():
+    def fake_post(url, **kw):
+        if url.endswith("/oauth2/v2.0/token"):
+            return FakeResp({"access_token": "T"})
+        return FakeResp({"error": "forbidden"}, status=403)      # e.g. missing send-as policy
+
+    tr = notify.GraphTransport(from_address="f@x.com", secrets={"K": "s"},
+                               client_id="c", tenant_id="t", client_secret_key="K", http_post=fake_post)
+    import pytest
+    with pytest.raises(Exception):
+        tr.send("f@x.com", ["a@x.com"], "s", "b")               # transport surfaces the failure
+
+    n = notify.Notifier(tr, notify.ConfigRecipientSource(["a@x.com"]), "f@x.com")
+    n.alert("t", "b")                                           # ...but via the notifier it's best-effort
+
+
+def test_graph_transport_missing_creds_raises_configerror_at_send_not_build():
+    tr = notify.GraphTransport(from_address="f@x.com", secrets={})       # build must not raise
+    import pytest
+    with pytest.raises(Exception):
+        tr.send("f@x.com", ["a@x.com"], "s", "b")               # missing client_id/tenant/secret_key
 
 
 def test_from_config_builds_notifier_with_injected_deps():

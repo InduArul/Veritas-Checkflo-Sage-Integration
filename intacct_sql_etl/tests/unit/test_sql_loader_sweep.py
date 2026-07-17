@@ -269,6 +269,33 @@ def test_archive_insert_is_column_explicit_not_select_star():
     assert "RUN_ID" in up and "DELETED_AT" in up                 # audit columns appended by name
 
 
+def test_archive_resolves_columns_for_schema_qualified_table():
+    """Regression for the 2026-07-17 prod incident: gl_table is `dbo.GLTable` (schema-qualified), but
+    _ordered_columns matched TABLE_NAME against the whole 'dbo.GLTable' string -> 0 rows -> empty
+    column list -> `INSERT INTO arch (, run_id, ...)` -> 42000 'Incorrect syntax near ,'. The column
+    lookup must SPLIT schema from bare name (INFORMATION_SCHEMA stores them in separate columns)."""
+    cfg = dict(CFG_ARCH, gl_table="dbo.test_GLTable",
+               gl_deleted_archive_table="dbo.test_GL_deleted_archive")
+    conn = FakeConnection([("100", "1"), ("101", "1")])      # columns keyed by BARE name, as real IS is
+    ld = sql_loader.SqlLoader(conn, cfg, source_env=ENV, run_id="RID")
+    ld.sweep_gl({("100", "1")}, S, E)                        # 101/1 deleted -> archive fires
+    ins = [c[0] for c in conn.cur.calls if "INSERT INTO dbo.test_GL_deleted_archive" in c[0]][0]
+    assert "(,RUN_ID" not in ins.upper().replace(" ", "")    # NOT an empty column list
+    for col in DEFAULT_COLUMNS["test_GLTable"]:              # every source column named explicitly
+        assert col.upper() in ins.upper()
+    assert "RUN_ID" in ins.upper() and "DELETED_AT" in ins.upper()
+
+
+def test_ordered_columns_fails_loud_when_no_columns_resolved():
+    """Defense-in-depth: a zero-column resolution must RAISE, never emit `INSERT (, run_id, ...)`."""
+    cfg = dict(CFG_ARCH, gl_table="dbo.test_GLTable",
+               gl_deleted_archive_table="dbo.test_GL_deleted_archive")
+    conn = FakeConnection([("100", "1"), ("101", "1")], columns={})   # IS returns nothing for any table
+    ld = sql_loader.SqlLoader(conn, cfg, source_env=ENV, run_id="RID")
+    with pytest.raises(Exception):
+        ld.sweep_gl({("100", "1")}, S, E)
+
+
 def test_sweep_does_not_archive_when_disabled():
     ld = _loader([("100", "1"), ("101", "1")])              # CFG has no archive_deletes
     ld.sweep_gl({("100", "1")}, S, E)

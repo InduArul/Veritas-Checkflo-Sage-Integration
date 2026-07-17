@@ -13,12 +13,24 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from . import transform
-from .config import assert_test_sql_targets, safe_identifier
+from .config import ConfigError, assert_test_sql_targets, safe_identifier
 from .pagination import DEFAULT_PAGE_SIZE
 
 
 class SweepGuardError(Exception):
     """Raised when a delete-sweep would remove more than the configured fraction of scanned rows."""
+
+
+def _split_object_name(qualified: str) -> "tuple[str | None, str]":
+    """Split a (possibly schema-qualified/bracketed) table name into (schema_or_None, bare_name).
+
+    INFORMATION_SCHEMA.COLUMNS stores TABLE_SCHEMA and TABLE_NAME in SEPARATE columns, so a lookup by
+    the qualified string (`dbo.GLTable`) matches nothing. 'dbo.GLTable' -> ('dbo','GLTable');
+    '[dbo].[GLTable]' -> ('dbo','GLTable'); 'GLTable' -> (None,'GLTable')."""
+    parts = str(qualified).replace("[", "").replace("]", "").split(".")
+    bare = parts[-1].strip()
+    schema = parts[-2].strip() if len(parts) >= 2 and parts[-2].strip() else None
+    return schema, bare
 
 
 @dataclass
@@ -97,12 +109,26 @@ class SqlLoader:
         column-EXPLICIT archive insert so source→archive alignment is by NAME, not position."""
         cache = self.__dict__.setdefault("_col_cache", {})
         if table not in cache:
-            cur.execute(
-                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
-                "WHERE TABLE_NAME = ? ORDER BY ORDINAL_POSITION",
-                (table,),
-            )
-            cache[table] = [safe_identifier(r[0]) for r in cur.fetchall()]
+            schema, bare = _split_object_name(table)
+            if schema:
+                cur.execute(
+                    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                    "WHERE TABLE_NAME = ? AND TABLE_SCHEMA = ? ORDER BY ORDINAL_POSITION",
+                    (bare, schema),
+                )
+            else:
+                cur.execute(
+                    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                    "WHERE TABLE_NAME = ? ORDER BY ORDINAL_POSITION",
+                    (bare,),
+                )
+            cols = [safe_identifier(r[0]) for r in cur.fetchall()]
+            if not cols:                                 # never build `INSERT (, run_id, ...)`
+                raise ConfigError(
+                    f"archive source table {table!r} resolved to ZERO columns "
+                    f"(bare={bare!r}, schema={schema!r}); refusing to build an empty archive insert"
+                )
+            cache[table] = cols
         return cache[table]
 
     def _archive_row(self, cur, arch: "str | None", src_table: str, where: str, key: tuple) -> None:

@@ -13,7 +13,7 @@ import json
 import logging
 from typing import Callable, Optional
 
-from .config import ConfigError
+from .config import ConfigError, resolve_secret
 
 log = logging.getLogger(__name__)
 
@@ -81,6 +81,27 @@ class ConfigRecipientSource:
 
     def list(self):
         return list(self._recipients)
+
+
+class FileRecipientSource:
+    """Reads the recipient list from a static text file (one email per line; blank lines and lines
+    starting with '#' ignored). Lets ops change WHO gets alerts by editing ONE file — no config edit,
+    no code change, no redeploy (people-independent). Wrapped in CachingRecipientSource so a bad/missing
+    file still falls back to the last-known-good list, then the fallback admin."""
+
+    def __init__(self, path):
+        if not path:
+            raise ConfigError("notify.recipients_file is required for recipient_source 'file'")
+        self._path = path
+
+    def list(self):
+        out = []
+        with open(self._path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                s = line.strip()
+                if s and not s.startswith("#"):
+                    out.append(s)
+        return out
 
 
 class SharePointRecipientSource:
@@ -165,18 +186,77 @@ class SmtpTransport:
 
 
 class GraphTransport:
-    """Microsoft Graph `sendMail` transport — deferred until the mailbox method is confirmed
-    (C5/OQ-27). Construction never fails; `send()` raises until implemented, and callers use it
-    best-effort so this can never crash a run (CR: 'graph' default previously aborted the ETL)."""
+    """Microsoft Graph `sendMail` transport (app-only client-credentials).
 
-    def __init__(self, from_address=None, secrets=None, **cfg):
-        self._cfg = cfg
+    Acquires an app token (client_id + tenant + client secret resolved by key from the secret store —
+    never in YAML) and POSTs `/users/{sender}/sendMail`. `requests` is imported lazily and the HTTP
+    layer / token fetch are injectable so unit tests need no network or SDK. Construction NEVER fails
+    (secrets resolve at send time); `send()` may raise and callers use it best-effort, so a mail
+    problem can never crash a run. Closes #8 without SMTP AUTH (which the tenant disables)."""
+
+    _AUTH_HOST = "https://login.microsoftonline.com"
+    _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
+    _SCOPE = "https://graph.microsoft.com/.default"
+
+    def __init__(self, from_address=None, secrets=None, *, client_id=None, tenant_id=None,
+                 client_secret_key=None, save_to_sent_items=False, timeout=30,
+                 content_type="Text", http_post=None, get_token=None, **_ignored):
+        self._from = from_address
+        self._secrets = secrets
+        self._client_id = client_id
+        self._tenant_id = tenant_id
+        self._client_secret_key = client_secret_key
+        self._save_to_sent = bool(save_to_sent_items)
+        self._timeout = timeout
+        self._content_type = content_type
+        self._http_post = http_post      # tests inject: (url, **kw) -> resp with .json()/.raise_for_status()
+        self._get_token = get_token      # tests inject: () -> access_token
+
+    def _post(self, url, **kw):
+        if self._http_post is not None:
+            return self._http_post(url, **kw)
+        import requests  # noqa: WPS433 (lazy: keeps unit tests network-free)
+        return requests.post(url, timeout=self._timeout, **kw)
+
+    def _token(self):
+        if self._get_token is not None:
+            return self._get_token()
+        if not (self._client_id and self._tenant_id and self._client_secret_key):
+            raise ConfigError(
+                "graph transport needs graph.client_id, graph.tenant_id, graph.client_secret_key"
+            )
+        secret = resolve_secret(self._client_secret_key, env=self._secrets)
+        resp = self._post(
+            f"{self._AUTH_HOST}/{self._tenant_id}/oauth2/v2.0/token",
+            data={
+                "client_id": self._client_id,
+                "client_secret": secret,
+                "grant_type": "client_credentials",
+                "scope": self._SCOPE,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()["access_token"]
 
     def send(self, from_addr, recipients, subject, body):
-        raise NotImplementedError(
-            "Graph sendMail transport not implemented yet (confirm C5/OQ-27); "
-            "set notify.transport: smtp or inject a transport"
+        sender = from_addr or self._from
+        if not sender:
+            raise ConfigError("graph transport needs a from_address (sender mailbox)")
+        token = self._token()
+        message = {
+            "message": {
+                "subject": subject,
+                "body": {"contentType": self._content_type, "content": body},
+                "toRecipients": [{"emailAddress": {"address": r}} for r in recipients],
+            },
+            "saveToSentItems": self._save_to_sent,
+        }
+        resp = self._post(
+            f"{self._GRAPH_BASE}/users/{sender}/sendMail",
+            json=message,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         )
+        resp.raise_for_status()
 
 
 def _build_transport(cfg, secrets, transport=None):
@@ -200,6 +280,8 @@ def _build_recipient_source(cfg, secrets, recipient_source=None):
     kind = (cfg.get("recipient_source") or "config").lower()
     if kind == "config":
         primary = ConfigRecipientSource(cfg.get("recipients"))
+    elif kind == "file":
+        primary = FileRecipientSource(cfg.get("recipients_file"))
     elif kind == "sharepoint":
         raise ConfigError("recipient_source 'sharepoint' needs Graph access (C6) — inject a source "
                           "or use 'config' until then")
